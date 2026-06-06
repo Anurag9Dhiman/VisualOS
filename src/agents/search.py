@@ -1,0 +1,146 @@
+"""Search Agent — Claude Sonnet ReAct loop with 3-call budget."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+
+import anthropic
+
+from src.contracts import (
+    CostEntry,
+    HistoricalFact,
+    LiveFact,
+    SearchResult,
+    ToolCallRecord,
+)
+from src.cost_logger import log_cost
+from src.prompts import GeoPoint, SEARCH_SYSTEM_PROMPT, build_search_user_message
+from src.tools.wikipedia_client import wikipedia_search
+from src.tools.wikidata_client import wikidata_lookup
+from src.tools.tavily_client import tavily_search
+from src.tools.osm_client import osm_lookup
+
+logger = logging.getLogger("lens.search")
+
+_MODEL = "claude-sonnet-4-6"
+_TIMEOUT_S = 0.8
+
+
+async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
+    try:
+        if tool_name == "wikipedia_summary":
+            result = await wikipedia_search(tool_input.get("entity", tool_input.get("query", "")))
+            return json.dumps({"summary": result.extract, "url": result.url})
+        elif tool_name == "wikidata_query":
+            result = await wikidata_lookup(tool_input.get("entity", "Q1"))
+            return json.dumps(result.facts)
+        elif tool_name == "tavily_search":
+            result = await tavily_search(tool_input.get("query", ""))
+            return json.dumps([r for r in result.results[:3]])
+        elif tool_name == "osm_nearby":
+            result = await osm_lookup(
+                tool_input.get("lat", 0.0),
+                tool_input.get("lng", 0.0),
+                tool_input.get("radius_m", 50),
+            )
+            return json.dumps({"name": result.name, "address": result.address,
+                               "opening_hours": result.opening_hours})
+        else:
+            return json.dumps({"error": f"Unknown tool: {tool_name}"})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+def _parse_search_output(data: dict) -> SearchResult:
+    tool_calls = [
+        ToolCallRecord(
+            tool=tc.get("tool", ""),
+            input=tc.get("input", {}),
+            justification=tc.get("justification", ""),
+            observation=tc.get("observation", ""),
+        )
+        for tc in data.get("tool_calls", [])
+    ][:3]
+
+    historical_facts = [
+        HistoricalFact(fact=f["fact"], source=f["source"])
+        for f in data.get("historical_facts", [])
+    ]
+    live_facts = [
+        LiveFact(fact=f["fact"], source=f["source"], as_of=f.get("as_of", ""))
+        for f in data.get("live_facts", [])
+    ]
+    skipped_reason = data.get("live_facts_skipped_reason", "")
+    if not live_facts and not skipped_reason:
+        skipped_reason = "No live data retrieved."
+
+    return SearchResult(
+        research_plan=data.get("research_plan", ""),
+        tool_calls=tool_calls,
+        historical_facts=historical_facts,
+        live_facts=live_facts,
+        live_facts_skipped_reason=skipped_reason,
+        identification_concerns=data.get("identification_concerns", []),
+        nearby_context=data.get("nearby_context", ""),
+    )
+
+
+async def run_search_agent(
+    entity_name: str,
+    entity_type: str,
+    vision_confidence_level: str,
+    user_interests: list[str],
+    lat: float | None,
+    lng: float | None,
+    cost_log: list[CostEntry],
+) -> SearchResult:
+    client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
+    user_msg = build_search_user_message(
+        entity_name, entity_type, vision_confidence_level, location, user_interests
+    )
+
+    try:
+        resp = await asyncio.wait_for(
+            client.messages.create(
+                model=_MODEL,
+                max_tokens=1500,
+                system=SEARCH_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
+            ),
+            timeout=_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Search agent timed out for '%s'", entity_name)
+        return SearchResult(
+            research_plan="Timed out.",
+            tool_calls=[],
+            historical_facts=[],
+            live_facts=[],
+            live_facts_skipped_reason="Search did not complete within budget.",
+        )
+
+    usage = resp.usage
+    cost_log.append(log_cost("search", _MODEL, usage.input_tokens, usage.output_tokens))
+
+    raw = resp.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.error("Search agent returned invalid JSON")
+        return SearchResult(
+            research_plan="JSON parse error.",
+            tool_calls=[],
+            historical_facts=[],
+            live_facts=[],
+            live_facts_skipped_reason="Search output could not be parsed.",
+        )
+
+    return _parse_search_output(data)
