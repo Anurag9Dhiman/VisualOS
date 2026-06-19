@@ -1,4 +1,4 @@
-"""Memory Agent — embedding-based retrieval from SQLite."""
+"""Memory Agent — Gemini embedding-based retrieval from SQLite."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import datetime
 
-from openai import AsyncOpenAI
+from google import genai
 
 from src.contracts import CostEntry, MemoryHit, MemoryResult
 from src.cost_logger import log_cost
@@ -15,7 +15,7 @@ from src import db
 
 logger = logging.getLogger("lens.memory")
 
-_EMBED_MODEL = "text-embedding-3-small"
+_EMBED_MODEL = "text-embedding-004"
 _TIMEOUT_S = 0.8
 
 
@@ -24,15 +24,18 @@ async def run_memory_agent(
     user_id: str,
     cost_log: list[CostEntry],
 ) -> MemoryResult:
-    client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
     embed_resp = await asyncio.wait_for(
-        client.embeddings.create(model=_EMBED_MODEL, input=subject_name),
+        client.aio.models.embed_content(
+            model=_EMBED_MODEL,
+            contents=subject_name,
+        ),
         timeout=_TIMEOUT_S / 2,
     )
-    usage = embed_resp.usage
-    cost_log.append(log_cost("memory_embed", _EMBED_MODEL, usage.prompt_tokens, 0))
-    query_vector = embed_resp.data[0].embedding
+    query_vector = embed_resp.embeddings[0].values
+    approx_tokens = max(1, len(subject_name.split()))
+    cost_log.append(log_cost("memory_embed", _EMBED_MODEL, approx_tokens, 0))
 
     rows = await asyncio.wait_for(
         db.search_interactions(user_id, query_vector, top_k=5),

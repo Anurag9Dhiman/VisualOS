@@ -107,13 +107,28 @@ async def _safe_search(
         return None
 
 
-async def specialists_node(state: LensState) -> LensState:
+async def vision_memory_node(state: LensState) -> LensState:
     vision_result, memory_result = await asyncio.gather(
         _safe_vision(state),
         _safe_memory(state, state["input"].image_path),
     )
-    search_result = await _safe_search(state, vision_result, memory_result)
-    return {**state, "vision_result": vision_result, "memory_result": memory_result, "search_result": search_result}
+    return {**state, "vision_result": vision_result, "memory_result": memory_result}
+
+
+def _should_search(state: LensState) -> str:
+    """Skip Search entirely when Vision has no useful identification."""
+    vision = state["vision_result"]
+    if vision is None or vision.needs_fallback or vision.confidence_level == "guessing":
+        logger.info("Confidence gate: skipping Search (confidence=%s, needs_fallback=%s)",
+                    vision.confidence_level if vision else "none",
+                    vision.needs_fallback if vision else True)
+        return "fuse"
+    return "search"
+
+
+async def search_node(state: LensState) -> LensState:
+    search_result = await _safe_search(state, state["vision_result"], state["memory_result"])
+    return {**state, "search_result": search_result}
 
 
 async def fuse_node(state: LensState) -> LensState:
@@ -155,19 +170,24 @@ async def _write_memory_async(
     user_id: str, subject_name: str, summary: str, cost_log: list[CostEntry]
 ) -> None:
     import os
-    from openai import AsyncOpenAI
+    from google import genai
     from src.cost_logger import log_cost
     from src import db
 
-    client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     try:
-        resp = await client.embeddings.create(model="text-embedding-3-small", input=subject_name)
-        cost_log.append(log_cost("memory_write_embed", "text-embedding-3-small", resp.usage.prompt_tokens, 0))
+        embed_resp = await client.aio.models.embed_content(
+            model="text-embedding-004",
+            contents=subject_name,
+        )
+        embedding = embed_resp.embeddings[0].values
+        approx_tokens = max(1, len(subject_name.split()))
+        cost_log.append(log_cost("memory_write_embed", "text-embedding-004", approx_tokens, 0))
         await db.write_interaction(
             user_id=user_id,
             subject_name=subject_name,
             summary=summary,
-            embedding=resp.data[0].embedding,
+            embedding=embedding,
         )
     except Exception as exc:
         logger.warning("write_memory async failed: %s", exc)
@@ -180,12 +200,14 @@ async def _write_memory_async(
 def _build_graph() -> StateGraph:
     g = StateGraph(LensState)
     g.add_node("plan", plan_node)
-    g.add_node("specialists", specialists_node)
+    g.add_node("vision_memory", vision_memory_node)
+    g.add_node("search", search_node)
     g.add_node("fuse", fuse_node)
     g.add_node("write_memory", write_memory_node)
     g.set_entry_point("plan")
-    g.add_edge("plan", "specialists")
-    g.add_edge("specialists", "fuse")
+    g.add_edge("plan", "vision_memory")
+    g.add_conditional_edges("vision_memory", _should_search, {"search": "search", "fuse": "fuse"})
+    g.add_edge("search", "fuse")
     g.add_edge("fuse", "write_memory")
     g.add_edge("write_memory", END)
     return g

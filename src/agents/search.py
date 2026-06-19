@@ -1,4 +1,4 @@
-"""Search Agent — Claude Sonnet ReAct loop with 3-call budget."""
+"""Search Agent — Gemini ReAct loop with 3-call budget."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import json
 import logging
 import os
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from src.contracts import (
     CostEntry,
@@ -25,7 +26,7 @@ from src.tools.osm_client import osm_lookup
 
 logger = logging.getLogger("lens.search")
 
-_MODEL = "claude-sonnet-4-6"
+_MODEL = "gemini-2.0-flash"
 _TIMEOUT_S = 0.8
 
 
@@ -39,7 +40,7 @@ async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps(result.facts)
         elif tool_name == "tavily_search":
             result = await tavily_search(tool_input.get("query", ""))
-            return json.dumps([r for r in result.results[:3]])
+            return json.dumps(result.results[:3])
         elif tool_name == "osm_nearby":
             result = await osm_lookup(
                 tool_input.get("lat", 0.0),
@@ -97,7 +98,7 @@ async def run_search_agent(
     lng: float | None,
     cost_log: list[CostEntry],
 ) -> SearchResult:
-    client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
     user_msg = build_search_user_message(
         entity_name, entity_type, vision_confidence_level, location, user_interests
@@ -105,11 +106,14 @@ async def run_search_agent(
 
     try:
         resp = await asyncio.wait_for(
-            client.messages.create(
+            client.aio.models.generate_content(
                 model=_MODEL,
-                max_tokens=1500,
-                system=SEARCH_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
+                contents=user_msg,
+                config=types.GenerateContentConfig(
+                    system_instruction=SEARCH_SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    max_output_tokens=1500,
+                ),
             ),
             timeout=_TIMEOUT_S,
         )
@@ -123,16 +127,13 @@ async def run_search_agent(
             live_facts_skipped_reason="Search did not complete within budget.",
         )
 
-    usage = resp.usage
-    cost_log.append(log_cost("search", _MODEL, usage.input_tokens, usage.output_tokens))
+    usage = resp.usage_metadata
+    cost_log.append(log_cost("search", _MODEL,
+                             usage.prompt_token_count or 0,
+                             usage.candidates_token_count or 0))
 
-    raw = resp.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
     try:
-        data = json.loads(raw)
+        data = json.loads(resp.text)
     except json.JSONDecodeError:
         logger.error("Search agent returned invalid JSON")
         return SearchResult(
