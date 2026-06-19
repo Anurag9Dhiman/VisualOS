@@ -10,17 +10,17 @@ from src.contracts import CostEntry
 
 logger = logging.getLogger("lens.cost")
 
+# Prices per 1 000 tokens (input / output)
 _PRICES: dict[str, tuple[float, float]] = {
-    "gpt-4o": (0.005, 0.015),
-    "gpt-4o-2024-08-06": (0.0025, 0.010),
-    "claude-sonnet-4-5": (0.003, 0.015),
-    "claude-sonnet-4-6": (0.003, 0.015),
-    "text-embedding-3-small": (0.00002, 0.0),
+    "gemini-2.0-flash": (0.000075, 0.0003),
+    "gemini-1.5-flash": (0.000075, 0.0003),
+    "gemini-1.5-pro": (0.00125, 0.005),
+    "text-embedding-004": (0.000025, 0.0),
 }
 
 
 def compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    prices = _PRICES.get(model, (0.01, 0.03))
+    prices = _PRICES.get(model, (0.001, 0.002))
     return (input_tokens / 1000) * prices[0] + (output_tokens / 1000) * prices[1]
 
 

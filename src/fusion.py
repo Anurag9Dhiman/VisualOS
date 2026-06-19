@@ -1,4 +1,4 @@
-"""Fusion step — Claude Sonnet composes agent outputs into a ResponseCard."""
+"""Fusion step — Gemini composes agent outputs into a ResponseCard."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import json
 import logging
 import os
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from src.contracts import (
     Citation,
@@ -26,7 +27,7 @@ from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
 
 logger = logging.getLogger("lens.fusion")
 
-_MODEL = "claude-sonnet-4-6"
+_MODEL = "gemini-2.0-flash"
 _TIMEOUT_S = 0.8
 
 
@@ -79,18 +80,21 @@ async def run_fusion(
     latency_ms: int,
     user_locale: str = "en-IN",
 ) -> ResponseCard:
-    client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     user_msg = build_fusion_user_message(
         _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
     )
 
     try:
         resp = await asyncio.wait_for(
-            client.messages.create(
+            client.aio.models.generate_content(
                 model=_MODEL,
-                max_tokens=1200,
-                system=FUSION_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
+                contents=user_msg,
+                config=types.GenerateContentConfig(
+                    system_instruction=FUSION_SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    max_output_tokens=1200,
+                ),
             ),
             timeout=_TIMEOUT_S,
         )
@@ -104,17 +108,13 @@ async def run_fusion(
             latency_ms=latency_ms,
         )
 
-    usage = resp.usage
-    cost_log.append(log_cost("fusion", _MODEL, usage.input_tokens, usage.output_tokens))
-
-    raw = resp.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+    usage = resp.usage_metadata
+    cost_log.append(log_cost("fusion", _MODEL,
+                             usage.prompt_token_count or 0,
+                             usage.candidates_token_count or 0))
 
     try:
-        data = json.loads(raw)
+        data = json.loads(resp.text)
     except json.JSONDecodeError:
         logger.error("Fusion returned invalid JSON")
         return FallbackCard(
@@ -125,9 +125,7 @@ async def run_fusion(
             latency_ms=latency_ms,
         )
 
-    card_type = data.get("card_type", "normal")
-
-    if card_type == "fallback":
+    if data.get("card_type") == "fallback":
         return FallbackCard(
             headline=data.get("headline", "Not sure what this is."),
             observation=data.get("observation", ""),
@@ -141,12 +139,8 @@ async def run_fusion(
         for h in data.get("personalized_hooks", [])
     ][:3]
     citations = [
-        Citation(
-            id=c.get("id", ""),
-            source_name=c.get("source_name", ""),
-            url=c.get("url", ""),
-            as_of=c.get("as_of"),
-        )
+        Citation(id=c.get("id", ""), source_name=c.get("source_name", ""),
+                 url=c.get("url", ""), as_of=c.get("as_of"))
         for c in data.get("citations", [])
     ]
     sm = data.get("source_mix", {})
