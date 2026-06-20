@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import logging
 import os
 
 from google import genai
 from google.genai import types
+from PIL import Image
 
 from src.contracts import CostEntry, VisionResult
 from src.cost_logger import log_cost
@@ -19,6 +21,26 @@ logger = logging.getLogger("lens.vision")
 
 _MODEL = "gemini-2.0-flash"
 _TIMEOUT_S = 0.8
+_MAX_DIMENSION = 1024
+_JPEG_QUALITY = 85
+
+
+def _preprocess_image(image_b64: str) -> bytes:
+    """Resize to max 1024px and compress to JPEG 85%. Reduces payload ~90% on large photos."""
+    raw = base64.b64decode(image_b64)
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+
+    original_size = len(raw)
+    if max(img.size) > _MAX_DIMENSION:
+        img.thumbnail((_MAX_DIMENSION, _MAX_DIMENSION), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
+    processed = buf.getvalue()
+
+    logger.debug("Image preprocessed: %d KB → %d KB (%dx%d)",
+                 original_size // 1024, len(processed) // 1024, img.width, img.height)
+    return processed
 
 
 async def run_vision_agent(
@@ -37,7 +59,7 @@ async def run_vision_agent(
         "Apply the 5-step reasoning process and return JSON."
     )
 
-    img_bytes = base64.b64decode(image_b64)
+    img_bytes = _preprocess_image(image_b64)
     contents = [
         types.Part.from_text(text=prompt),
         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
