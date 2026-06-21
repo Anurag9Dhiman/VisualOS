@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, END
 
 from src.contracts import (
     CostEntry,
+    FallbackCard,
     LensInput,
     MemoryResult,
     NormalCard,
@@ -36,6 +37,7 @@ class LensState(TypedDict):
     cost_log: list[CostEntry]
     errors: list[str]
     _start_time: float
+    _cache_key: str
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +48,10 @@ def plan_node(state: LensState) -> LensState:
     inp = state["input"]
     image_data = Path(inp.image_path).read_bytes()
     image_b64 = base64.b64encode(image_data).decode()
+    from src.cache import make_cache_key
+    from src.agents.vision import _preprocess_image
+    preprocessed = _preprocess_image(image_b64)
+    cache_key = make_cache_key(preprocessed, inp.lat, inp.lng)
     return {
         **state,
         "image_b64": image_b64,
@@ -56,6 +62,7 @@ def plan_node(state: LensState) -> LensState:
         "cost_log": [],
         "errors": [],
         "_start_time": time.monotonic(),
+        "_cache_key": cache_key,
     }
 
 
@@ -107,6 +114,26 @@ async def _safe_search(
         return None
 
 
+async def cache_check_node(state: LensState) -> LensState:
+    from src.cache import cache_get
+    cached = await cache_get(state["_cache_key"])
+    if cached is None:
+        return state
+    card_type = cached.get("card_type", "normal")
+    if card_type == "fallback":
+        card: ResponseCard = FallbackCard(**{k: v for k, v in cached.items()
+                                            if k in FallbackCard.model_fields})
+    else:
+        card = NormalCard(**{k: v for k, v in cached.items()
+                             if k in NormalCard.model_fields})
+    logger.info("Returning cached card — skipping all agents")
+    return {**state, "response_card": card}
+
+
+def _should_run_agents(state: LensState) -> str:
+    return "done" if state["response_card"] is not None else "vision_memory"
+
+
 async def vision_memory_node(state: LensState) -> LensState:
     vision_result, memory_result = await asyncio.gather(
         _safe_vision(state),
@@ -146,7 +173,16 @@ async def fuse_node(state: LensState) -> LensState:
         latency_ms=elapsed_ms,
         user_locale=state["input"].user_locale,
     )
+    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card))
     return {**state, "response_card": card}
+
+
+async def _write_cache_async(cache_key: str, card: ResponseCard) -> None:
+    from src.cache import cache_set
+    try:
+        await cache_set(cache_key, card.model_dump())
+    except Exception as exc:
+        logger.warning("cache_set failed: %s", exc)
 
 
 async def write_memory_node(state: LensState) -> LensState:
@@ -200,12 +236,15 @@ async def _write_memory_async(
 def _build_graph() -> StateGraph:
     g = StateGraph(LensState)
     g.add_node("plan", plan_node)
+    g.add_node("cache_check", cache_check_node)
     g.add_node("vision_memory", vision_memory_node)
     g.add_node("search", search_node)
     g.add_node("fuse", fuse_node)
     g.add_node("write_memory", write_memory_node)
     g.set_entry_point("plan")
-    g.add_edge("plan", "vision_memory")
+    g.add_edge("plan", "cache_check")
+    g.add_conditional_edges("cache_check", _should_run_agents,
+                            {"vision_memory": "vision_memory", "done": "write_memory"})
     g.add_conditional_edges("vision_memory", _should_search, {"search": "search", "fuse": "fuse"})
     g.add_edge("search", "fuse")
     g.add_edge("fuse", "write_memory")
@@ -218,7 +257,9 @@ _graph = _build_graph().compile()
 
 async def run_pipeline(inp: LensInput) -> LensState:
     from src import db
+    from src.cache import init_cache
     db.init_db()
+    init_cache(db.DB_PATH)
     initial: LensState = {
         "input": inp,
         "image_b64": "",
@@ -229,5 +270,6 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "cost_log": [],
         "errors": [],
         "_start_time": time.monotonic(),
+        "_cache_key": "",
     }
     return await asyncio.wait_for(_graph.ainvoke(initial), timeout=_OVERALL_TIMEOUT_S)
