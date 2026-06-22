@@ -24,6 +24,7 @@ from src.contracts import (
 )
 from src.cost_logger import log_cost
 from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
+from typing import AsyncIterator
 
 logger = logging.getLogger("lens.fusion")
 
@@ -159,3 +160,104 @@ async def run_fusion(
         cost_usd_total=cost_usd_total,
         latency_ms=latency_ms,
     )
+
+
+def _parse_card(raw: str, cost_usd_total: float, latency_ms: int) -> ResponseCard:
+    """Parse accumulated JSON text into a ResponseCard."""
+    try:
+        data = json.loads(raw.strip())
+    except json.JSONDecodeError:
+        return FallbackCard(
+            headline="Could not parse response.",
+            observation="Internal error in the fusion step.",
+            suggestion="Try again.",
+            cost_usd_total=cost_usd_total,
+            latency_ms=latency_ms,
+        )
+
+    if data.get("card_type") == "fallback":
+        return FallbackCard(
+            headline=data.get("headline", "Not sure what this is."),
+            observation=data.get("observation", ""),
+            suggestion=data.get("suggestion", "Try a clearer angle."),
+            cost_usd_total=cost_usd_total,
+            latency_ms=latency_ms,
+        )
+
+    hooks = [
+        PersonalizedHook(fact=h["fact"], citation_tag=h.get("citation_tag", ""))
+        for h in data.get("personalized_hooks", [])
+    ][:3]
+    citations = [
+        Citation(id=c.get("id", ""), source_name=c.get("source_name", ""),
+                 url=c.get("url", ""), as_of=c.get("as_of"))
+        for c in data.get("citations", [])
+    ]
+    sm = data.get("source_mix", {})
+    return NormalCard(
+        headline=data.get("headline", ""),
+        body=data.get("body", ""),
+        personalized_hooks=hooks,
+        citations=citations,
+        confidence_displayed=data.get("confidence_displayed", "high"),
+        source_mix=SourceMix(
+            used_vision=sm.get("used_vision", True),
+            used_memory=sm.get("used_memory", False),
+            used_search=sm.get("used_search", True),
+        ),
+        cost_usd_total=cost_usd_total,
+        latency_ms=latency_ms,
+    )
+
+
+async def stream_fusion(
+    vision: VisionResult | None,
+    memory: MemoryResult | None,
+    search: SearchResult | None,
+    cost_log: list[CostEntry],
+    cost_usd_total: float,
+    latency_ms: int,
+    user_locale: str = "en-IN",
+) -> AsyncIterator[tuple[str, ResponseCard | None]]:
+    """Async generator — yields (chunk, None) for each token chunk,
+    then (full_text, card) as the final item once streaming completes."""
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    user_msg = build_fusion_user_message(
+        _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
+    )
+
+    accumulated = ""
+    final_usage = None
+
+    try:
+        async for chunk in await client.aio.models.generate_content_stream(
+            model=_MODEL,
+            contents=user_msg,
+            config=types.GenerateContentConfig(
+                system_instruction=FUSION_SYSTEM_PROMPT,
+                max_output_tokens=1200,
+            ),
+        ):
+            if chunk.text:
+                accumulated += chunk.text
+                yield chunk.text, None
+            if chunk.usage_metadata and chunk.usage_metadata.candidates_token_count:
+                final_usage = chunk.usage_metadata
+    except Exception as exc:
+        logger.error("stream_fusion error: %s", exc)
+        yield "", FallbackCard(
+            headline="Streaming failed.",
+            observation=str(exc),
+            suggestion="Try again.",
+            cost_usd_total=cost_usd_total,
+            latency_ms=latency_ms,
+        )
+        return
+
+    if final_usage:
+        cost_log.append(log_cost("fusion_stream", _MODEL,
+                                 final_usage.prompt_token_count or 0,
+                                 final_usage.candidates_token_count or 0))
+
+    card = _parse_card(accumulated, cost_usd_total, latency_ms)
+    yield accumulated, card

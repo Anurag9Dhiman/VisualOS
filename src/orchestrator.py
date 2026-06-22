@@ -255,6 +255,61 @@ def _build_graph() -> StateGraph:
 _graph = _build_graph().compile()
 
 
+async def stream_pipeline(inp: LensInput):
+    """Run Vision + Memory + Search, then stream Fusion tokens.
+
+    Yields (chunk, None) for each text chunk, then (full_text, final_state)
+    as the last item once the card is fully assembled.
+    """
+    from src import db
+    from src.fusion import stream_fusion
+
+    db.init_db()
+    start = time.monotonic()
+    cost_log: list[CostEntry] = []
+    errors: list[str] = []
+
+    image_data = Path(inp.image_path).read_bytes()
+    image_b64 = base64.b64encode(image_data).decode()
+
+    fake_state: LensState = {
+        "input": inp, "image_b64": image_b64,
+        "vision_result": None, "memory_result": None, "search_result": None,
+        "response_card": None, "cost_log": cost_log, "errors": errors,
+        "_start_time": start, "_cache_key": "",
+    }
+
+    vision_result, memory_result = await asyncio.gather(
+        _safe_vision(fake_state),
+        _safe_memory(fake_state, inp.image_path),
+    )
+
+    search_result = None
+    if vision_result and not vision_result.needs_fallback and vision_result.confidence_level != "guessing":
+        search_result = await _safe_search(fake_state, vision_result, memory_result)
+
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+    cost_usd_so_far = sum(e.cost_usd for e in cost_log)
+
+    final_card = None
+    async for chunk, card in stream_fusion(
+        vision_result, memory_result, search_result,
+        cost_log, cost_usd_so_far, elapsed_ms, inp.user_locale,
+    ):
+        if card is not None:
+            final_card = card
+            final_state: LensState = {
+                **fake_state,
+                "vision_result": vision_result,
+                "memory_result": memory_result,
+                "search_result": search_result,
+                "response_card": final_card,
+            }
+            yield chunk, final_state
+        else:
+            yield chunk, None
+
+
 async def run_pipeline(inp: LensInput) -> LensState:
     from src import db
     from src.cache import init_cache
