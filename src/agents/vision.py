@@ -16,6 +16,7 @@ from PIL import Image
 from src.contracts import CostEntry, VisionResult
 from src.cost_logger import log_cost
 from src.prompts import GeoPoint, VISION_SYSTEM_PROMPT
+from src import rate_limiter
 
 logger = logging.getLogger("lens.vision")
 
@@ -65,6 +66,7 @@ async def run_vision_agent(
         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
     ]
 
+    await rate_limiter.acquire(_MODEL)
     resp = await asyncio.wait_for(
         client.aio.models.generate_content(
             model=_MODEL,
