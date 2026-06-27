@@ -197,13 +197,15 @@ async def write_memory_node(state: LensState) -> LensState:
             subject_name=vision.entity_name,
             summary=card.body,
             cost_log=state["cost_log"],
+            entity_type=vision.entity_type,
         )
     )
     return state
 
 
 async def _write_memory_async(
-    user_id: str, subject_name: str, summary: str, cost_log: list[CostEntry]
+    user_id: str, subject_name: str, summary: str, cost_log: list[CostEntry],
+    entity_type: str = "unknown",
 ) -> None:
     import os
     from google import genai
@@ -225,6 +227,7 @@ async def _write_memory_async(
             summary=summary,
             embedding=embedding,
         )
+        await db.upsert_interest(user_id, entity_type)
     except Exception as exc:
         logger.warning("write_memory async failed: %s", exc)
 

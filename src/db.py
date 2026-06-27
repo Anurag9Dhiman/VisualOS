@@ -47,6 +47,13 @@ def init_db(path: Path = DB_PATH) -> None:
                 cost_usd    REAL NOT NULL,
                 created_at  TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS user_interests (
+                user_id     TEXT NOT NULL,
+                interest    TEXT NOT NULL,
+                score       REAL NOT NULL DEFAULT 1.0,
+                updated_at  TEXT NOT NULL,
+                PRIMARY KEY (user_id, interest)
+            );
         """)
         conn.commit()
         logger.info("DB initialised at %s", path)
@@ -132,6 +139,46 @@ async def search_interactions(
         return scored[:top_k]
 
     return await asyncio.get_event_loop().run_in_executor(None, _search)
+
+
+async def upsert_interest(user_id: str, interest: str, weight: float = 1.0) -> None:
+    """Increment an interest score; decay existing score by 0.9 to favour recency."""
+    def _upsert() -> None:
+        conn = _get_conn()
+        try:
+            existing = conn.execute(
+                "SELECT score FROM user_interests WHERE user_id = ? AND interest = ?",
+                (user_id, interest),
+            ).fetchone()
+            new_score = (existing["score"] * 0.9 + weight) if existing else weight
+            conn.execute(
+                "INSERT INTO user_interests (user_id, interest, score, updated_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id, interest) DO UPDATE SET score = excluded.score, updated_at = excluded.updated_at",
+                (user_id, interest, new_score, datetime.utcnow().isoformat()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    await asyncio.get_event_loop().run_in_executor(None, _upsert)
+
+
+async def get_user_interests(user_id: str, top_k: int = 10) -> dict[str, float]:
+    """Return top-k interests sorted by score descending."""
+    def _get() -> dict[str, float]:
+        conn = _get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT interest, score FROM user_interests WHERE user_id = ? "
+                "ORDER BY score DESC LIMIT ?",
+                (user_id, top_k),
+            ).fetchall()
+            return {r["interest"]: round(r["score"], 3) for r in rows}
+        finally:
+            conn.close()
+
+    return await asyncio.get_event_loop().run_in_executor(None, _get)
 
 
 async def write_cost_entry(
