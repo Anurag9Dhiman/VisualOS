@@ -76,29 +76,49 @@ async def main() -> None:
         sys.exit(1)
 
     from src.contracts import LensInput
-    from src.orchestrator import run_pipeline
+    from src.orchestrator import run_pipeline, stream_pipeline
 
     inp = LensInput(image_path=str(image_path), lat=args.lat, lng=args.lng, user_id=args.user_id)
-
     print(f"Processing {image_path.name}…", file=sys.stderr)
-    try:
-        state = await run_pipeline(inp)
-    except asyncio.TimeoutError:
-        print("Error: pipeline exceeded 2.5s overall timeout", file=sys.stderr)
-        sys.exit(1)
 
-    card = state.get("response_card")
-    if card is None:
-        print("Error: pipeline did not produce a response card", file=sys.stderr)
-        for e in state.get("errors", []):
-            print(f"  - {e}", file=sys.stderr)
-        sys.exit(1)
-
-    card_dict = card.model_dump()
     if args.json:
-        print(json.dumps(card_dict, indent=2, default=str))
+        # Non-streaming: wait for full card, dump JSON
+        try:
+            state = await run_pipeline(inp)
+        except asyncio.TimeoutError:
+            print("Error: pipeline exceeded 2.5s overall timeout", file=sys.stderr)
+            sys.exit(1)
+        card = state.get("response_card")
+        if card is None:
+            print("Error: pipeline did not produce a response card", file=sys.stderr)
+            for e in state.get("errors", []):
+                print(f"  - {e}", file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps(card.model_dump(), indent=2, default=str))
     else:
-        _print_card(card_dict)
+        # Streaming: print tokens as they arrive, then show formatted card
+        print("\nThinking…", file=sys.stderr)
+        final_state = None
+        try:
+            async for chunk, state in stream_pipeline(inp):
+                if state is not None:
+                    final_state = state
+                else:
+                    print(chunk, end="", flush=True)
+        except asyncio.TimeoutError:
+            print("\nError: pipeline exceeded timeout", file=sys.stderr)
+            sys.exit(1)
+
+        print()  # newline after streaming tokens
+
+        if final_state is None:
+            print("Error: pipeline did not produce a response card", file=sys.stderr)
+            sys.exit(1)
+
+        card = final_state.get("response_card")
+        if card:
+            print()
+            _print_card(card.model_dump())
 
 
 if __name__ == "__main__":
