@@ -19,6 +19,7 @@ from src.contracts import (
 )
 from src.cost_logger import log_cost
 from src.prompts import GeoPoint, SEARCH_SYSTEM_PROMPT, build_search_user_message
+from src import rate_limiter
 from src.tools.wikipedia_client import wikipedia_search
 from src.tools.wikidata_client import wikidata_lookup
 from src.tools.tavily_client import tavily_search
@@ -104,6 +105,7 @@ async def run_search_agent(
         entity_name, entity_type, vision_confidence_level, location, user_interests
     )
 
+    await rate_limiter.acquire(_MODEL)
     try:
         resp = await asyncio.wait_for(
             client.aio.models.generate_content(

@@ -24,6 +24,7 @@ from src.contracts import (
 )
 from src.cost_logger import log_cost
 from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
+from src import rate_limiter
 from typing import AsyncIterator
 
 logger = logging.getLogger("lens.fusion")
@@ -86,6 +87,7 @@ async def run_fusion(
         _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
     )
 
+    await rate_limiter.acquire(_MODEL)
     try:
         resp = await asyncio.wait_for(
             client.aio.models.generate_content(

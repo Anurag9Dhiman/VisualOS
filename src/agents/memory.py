@@ -11,7 +11,7 @@ from google import genai
 
 from src.contracts import CostEntry, MemoryHit, MemoryResult
 from src.cost_logger import log_cost
-from src import db
+from src import db, rate_limiter
 
 logger = logging.getLogger("lens.memory")
 
@@ -26,6 +26,7 @@ async def run_memory_agent(
 ) -> MemoryResult:
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
+    await rate_limiter.acquire(_EMBED_MODEL)
     embed_resp = await asyncio.wait_for(
         client.aio.models.embed_content(
             model=_EMBED_MODEL,
