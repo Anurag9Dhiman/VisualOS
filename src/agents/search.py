@@ -34,22 +34,22 @@ _TIMEOUT_S = 0.8
 async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
     try:
         if tool_name == "wikipedia_summary":
-            result = await wikipedia_search(tool_input.get("entity", tool_input.get("query", "")))
-            return json.dumps({"summary": result.extract, "url": result.url})
+            wiki = await wikipedia_search(tool_input.get("entity", tool_input.get("query", "")))
+            return json.dumps({"summary": wiki.extract, "url": wiki.url})
         elif tool_name == "wikidata_query":
-            result = await wikidata_lookup(tool_input.get("entity", "Q1"))
-            return json.dumps(result.facts)
+            wd = await wikidata_lookup(tool_input.get("entity", "Q1"))
+            return json.dumps(wd.facts)
         elif tool_name == "tavily_search":
-            result = await tavily_search(tool_input.get("query", ""))
-            return json.dumps(result.results[:3])
+            tav = await tavily_search(tool_input.get("query", ""))
+            return json.dumps(tav.results[:3])
         elif tool_name == "osm_nearby":
-            result = await osm_lookup(
+            osm = await osm_lookup(
                 tool_input.get("lat", 0.0),
                 tool_input.get("lng", 0.0),
                 tool_input.get("radius_m", 50),
             )
-            return json.dumps({"name": result.name, "address": result.address,
-                               "opening_hours": result.opening_hours})
+            return json.dumps({"name": osm.name, "address": osm.address,
+                               "opening_hours": osm.opening_hours})
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
     except Exception as exc:
@@ -131,11 +131,11 @@ async def run_search_agent(
 
     usage = resp.usage_metadata
     cost_log.append(log_cost("search", _MODEL,
-                             usage.prompt_token_count or 0,
-                             usage.candidates_token_count or 0))
+                             (usage.prompt_token_count or 0) if usage else 0,
+                             (usage.candidates_token_count or 0) if usage else 0))
 
     try:
-        data = json.loads(resp.text)
+        data = json.loads(resp.text or "{}")
     except json.JSONDecodeError:
         logger.error("Search agent returned invalid JSON")
         return SearchResult(

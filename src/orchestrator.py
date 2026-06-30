@@ -216,7 +216,7 @@ async def _write_memory_async(
             model="text-embedding-004",
             contents=subject_name,
         )
-        embedding = embed_resp.embeddings[0].values
+        embedding: list[float] = embed_resp.embeddings[0].values  # type: ignore[index, assignment]
         approx_tokens = max(1, len(subject_name.split()))
         cost_log.append(log_cost("memory_write_embed", "text-embedding-004", approx_tokens, 0))
         await db.write_interaction(
@@ -327,4 +327,4 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "_start_time": time.monotonic(),
         "_cache_key": "",
     }
-    return await asyncio.wait_for(_graph.ainvoke(initial), timeout=_OVERALL_TIMEOUT_S)
+    return await asyncio.wait_for(_graph.ainvoke(initial), timeout=_OVERALL_TIMEOUT_S)  # type: ignore[arg-type]

@@ -33,7 +33,7 @@ def _preprocess_image(image_b64: str) -> bytes:
 
     original_size = len(raw)
     if max(img.size) > _MAX_DIMENSION:
-        img.thumbnail((_MAX_DIMENSION, _MAX_DIMENSION), Image.LANCZOS)
+        img.thumbnail((_MAX_DIMENSION, _MAX_DIMENSION), Image.LANCZOS)  # type: ignore[attr-defined]
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
@@ -61,7 +61,7 @@ async def run_vision_agent(
     )
 
     img_bytes = _preprocess_image(image_b64)
-    contents = [
+    contents: list = [  # type: ignore[type-arg]
         types.Part.from_text(text=prompt),
         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
     ]
@@ -70,7 +70,7 @@ async def run_vision_agent(
     resp = await asyncio.wait_for(
         client.aio.models.generate_content(
             model=_MODEL,
-            contents=contents,
+            contents=contents,  # type: ignore[arg-type]
             config=types.GenerateContentConfig(
                 system_instruction=VISION_SYSTEM_PROMPT,
                 response_mime_type="application/json",
@@ -82,10 +82,10 @@ async def run_vision_agent(
 
     usage = resp.usage_metadata
     cost_log.append(log_cost("vision", _MODEL,
-                             usage.prompt_token_count or 0,
-                             usage.candidates_token_count or 0))
+                             (usage.prompt_token_count or 0) if usage else 0,
+                             (usage.candidates_token_count or 0) if usage else 0))
 
-    data = json.loads(resp.text)
+    data = json.loads(resp.text or "{}")
     return VisionResult(
         entity_name=data["entity_name"],
         entity_type=data.get("entity_type", "unknown"),
