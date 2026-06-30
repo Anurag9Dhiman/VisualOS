@@ -113,11 +113,11 @@ async def run_fusion(
 
     usage = resp.usage_metadata
     cost_log.append(log_cost("fusion", _MODEL,
-                             usage.prompt_token_count or 0,
-                             usage.candidates_token_count or 0))
+                             (usage.prompt_token_count or 0) if usage else 0,
+                             (usage.candidates_token_count or 0) if usage else 0))
 
     try:
-        data = json.loads(resp.text)
+        data = json.loads(resp.text or "{}")
     except json.JSONDecodeError:
         logger.error("Fusion returned invalid JSON")
         return FallbackCard(
