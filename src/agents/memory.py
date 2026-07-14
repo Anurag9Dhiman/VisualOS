@@ -35,7 +35,8 @@ async def run_memory_agent(
         ),
         timeout=_TIMEOUT_S / 2,
     )
-    query_vector = embed_resp.embeddings[0].values
+    raw_embeddings = embed_resp.embeddings  # type: ignore[union-attr]
+    query_vector: list[float] = raw_embeddings[0].values  # type: ignore[index, assignment]
     approx_tokens = max(1, len(subject_name.split()))
     cost_log.append(log_cost("memory_embed", _EMBED_MODEL, approx_tokens, 0))
 
