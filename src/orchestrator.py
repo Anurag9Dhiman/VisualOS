@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import TypedDict
 
+from langsmith import traceable
 from langgraph.graph import StateGraph, END
 
 from src.contracts import (
@@ -255,6 +256,21 @@ def _build_graph() -> StateGraph:
 _graph = _build_graph().compile()
 
 
+def _run_config(inp: LensInput) -> dict:
+    """LangGraph run config — carries per-request metadata into LangSmith traces."""
+    return {
+        "run_name": "lens_pipeline",
+        "metadata": {
+            "user_id": inp.user_id,
+            "image_path": str(inp.image_path),
+            "lat": inp.lat,
+            "lng": inp.lng,
+        },
+        "tags": ["lens-os", "phase0"],
+    }
+
+
+@traceable(name="lens_stream_pipeline", run_type="chain")
 async def stream_pipeline(inp: LensInput):
     """Run Vision + Memory + Search, then stream Fusion tokens.
 
@@ -327,4 +343,7 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "_start_time": time.monotonic(),
         "_cache_key": "",
     }
-    return await asyncio.wait_for(_graph.ainvoke(initial), timeout=_OVERALL_TIMEOUT_S)  # type: ignore[arg-type]
+    return await asyncio.wait_for(  # type: ignore[arg-type]
+        _graph.ainvoke(initial, config=_run_config(inp)),
+        timeout=_OVERALL_TIMEOUT_S,
+    )
