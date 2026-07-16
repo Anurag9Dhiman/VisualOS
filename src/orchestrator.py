@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import TypedDict
 
+from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 from langgraph.graph import StateGraph, END
 
@@ -259,7 +260,7 @@ def _build_graph() -> StateGraph:
 _graph = _build_graph().compile()
 
 
-def _run_config(inp: LensInput) -> dict:
+def _run_config(inp: LensInput) -> RunnableConfig:
     """LangGraph run config — carries per-request metadata into LangSmith traces."""
     return {
         "run_name": "lens_pipeline",
@@ -346,7 +347,7 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "_start_time": time.monotonic(),
         "_cache_key": "",
     }
-    return await asyncio.wait_for(  # type: ignore[arg-type]
-        _graph.ainvoke(initial, config=_run_config(inp)),
+    return await asyncio.wait_for(
+        _graph.ainvoke(initial, config=_run_config(inp)),  # type: ignore[arg-type]
         timeout=_OVERALL_TIMEOUT_S,
     )
