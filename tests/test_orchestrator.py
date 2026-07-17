@@ -23,6 +23,7 @@ from src.contracts import (
     VisionResult,
 )
 from src.orchestrator import (
+    _run_config,
     _should_run_agents,
     _should_search,
     cache_check_node,
@@ -305,3 +306,125 @@ async def test_run_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monke
 
     mock_search.assert_not_called()
     assert isinstance(state["response_card"], FallbackCard)
+
+
+# ---------------------------------------------------------------------------
+# _run_config
+# ---------------------------------------------------------------------------
+
+def test_run_config_run_name():
+    inp = LensInput(image_path="/photos/test.jpg", lat=0.0, lng=0.0)
+    assert _run_config(inp)["run_name"] == "lens_pipeline"
+
+
+def test_run_config_embeds_user_id():
+    inp = LensInput(image_path="/photos/test.jpg", lat=0.0, lng=0.0, user_id="user-42")
+    assert _run_config(inp)["metadata"]["user_id"] == "user-42"
+
+
+def test_run_config_embeds_lat_lng():
+    inp = LensInput(image_path="/photos/test.jpg", lat=12.95, lng=77.58)
+    cfg = _run_config(inp)
+    assert cfg["metadata"]["lat"] == 12.95
+    assert cfg["metadata"]["lng"] == 77.58
+
+
+def test_run_config_has_phase0_tag():
+    inp = LensInput(image_path="/photos/test.jpg", lat=0.0, lng=0.0)
+    assert "phase0" in _run_config(inp)["tags"]
+
+
+# ---------------------------------------------------------------------------
+# stream_pipeline — primary streaming path
+# ---------------------------------------------------------------------------
+
+async def _fake_stream_fusion(vision, memory, search, cost_log, cost_usd, latency, locale="en-IN"):
+    yield "The Eiffel", None
+    yield " Tower.", None
+    card = NormalCard(
+        headline="The Eiffel Tower",
+        body="An iron lattice tower.",
+        personalized_hooks=[],
+        citations=[],
+        confidence_displayed="high",
+        source_mix={"used_vision": True, "used_memory": False, "used_search": True},
+        cost_usd_total=cost_usd,
+        latency_ms=latency,
+    )
+    yield "The Eiffel Tower.", card
+
+
+@pytest.mark.asyncio
+async def test_stream_pipeline_yields_chunks_then_final_state(tmp_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    img_path = tmp_path / "scene.jpg"
+    _make_jpeg(img_path)
+    inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
+
+    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))), \
+         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
+         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())), \
+         patch("src.fusion.stream_fusion", side_effect=_fake_stream_fusion):
+        from src.orchestrator import stream_pipeline
+        results = []
+        async for chunk, state in stream_pipeline(inp):
+            results.append((chunk, state))
+
+    # Intermediate chunks have state=None
+    intermediate = [(c, s) for c, s in results if s is None]
+    assert len(intermediate) >= 1
+
+    # Final item has a populated LensState
+    final_chunk, final_state = results[-1]
+    assert final_state is not None
+    assert isinstance(final_state["response_card"], NormalCard)
+    assert final_state["vision_result"].entity_name == "Lalbagh Gate"
+
+
+@pytest.mark.asyncio
+async def test_stream_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    img_path = tmp_path / "scene.jpg"
+    _make_jpeg(img_path)
+    inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
+
+    async def _fallback_stream(vision, memory, search, cost_log, cost_usd, latency, locale="en-IN"):
+        yield "", _fallback_card()
+
+    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("guessing", True))), \
+         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
+         patch("src.agents.search.run_search_agent", new=AsyncMock()) as mock_search, \
+         patch("src.fusion.stream_fusion", side_effect=_fallback_stream):
+        from src.orchestrator import stream_pipeline
+        results = []
+        async for chunk, state in stream_pipeline(inp):
+            results.append((chunk, state))
+
+    mock_search.assert_not_called()
+    _, final_state = results[-1]
+    assert isinstance(final_state["response_card"], FallbackCard)
+
+
+@pytest.mark.asyncio
+async def test_stream_pipeline_passes_search_result_when_confident(tmp_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    img_path = tmp_path / "scene.jpg"
+    _make_jpeg(img_path)
+    inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
+
+    captured_search = {}
+
+    async def _capture_stream(vision, memory, search, cost_log, cost_usd, latency, locale="en-IN"):
+        captured_search["result"] = search
+        yield "", _normal_card()
+
+    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))), \
+         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
+         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())), \
+         patch("src.fusion.stream_fusion", side_effect=_capture_stream):
+        from src.orchestrator import stream_pipeline
+        async for _ in stream_pipeline(inp):
+            pass
+
+    assert captured_search["result"] is not None
+    assert captured_search["result"].research_plan == "Wikipedia first."
