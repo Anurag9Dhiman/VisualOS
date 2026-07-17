@@ -418,3 +418,87 @@ async def test_fusion_invalid_json_returns_fallback(monkeypatch):
         card = await run_fusion(None, None, None, [], cost_usd_total=0.0, latency_ms=0)
 
     assert isinstance(card, FallbackCard)
+
+
+# ---------------------------------------------------------------------------
+# _dispatch_tool — search agent tool dispatcher
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_wikipedia():
+    from src.agents.search import _dispatch_tool
+    from src.contracts import WikipediaResult
+
+    mock_result = WikipediaResult(title="Eiffel Tower", extract="Iron lattice tower.", url="https://en.wikipedia.org/wiki/Eiffel_Tower")
+
+    with patch("src.agents.search.wikipedia_search", new=AsyncMock(return_value=mock_result)):
+        out = await _dispatch_tool("wikipedia_summary", {"entity": "Eiffel Tower"})
+
+    data = json.loads(out)
+    assert "Iron lattice tower" in data["summary"]
+    assert "wikipedia.org" in data["url"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_wikidata():
+    from src.agents.search import _dispatch_tool
+    from src.contracts import WikidataResult
+
+    mock_result = WikidataResult(entity_id="Q243", label="Eiffel Tower", facts={"height": "330 m"}, url="https://www.wikidata.org/wiki/Q243")
+
+    with patch("src.agents.search.wikidata_lookup", new=AsyncMock(return_value=mock_result)):
+        out = await _dispatch_tool("wikidata_query", {"entity": "Q243"})
+
+    data = json.loads(out)
+    assert data["height"] == "330 m"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_tavily():
+    from src.agents.search import _dispatch_tool
+    from src.contracts import TavilyResult
+
+    mock_result = TavilyResult(query="Eiffel Tower hours", results=[{"title": "Hours", "url": "https://example.com", "content": "Open daily."}])
+
+    with patch("src.agents.search.tavily_search", new=AsyncMock(return_value=mock_result)):
+        out = await _dispatch_tool("tavily_search", {"query": "Eiffel Tower hours"})
+
+    data = json.loads(out)
+    assert data[0]["title"] == "Hours"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_osm():
+    from src.agents.search import _dispatch_tool
+    from src.contracts import OSMResult
+
+    mock_result = OSMResult(name="Lalbagh Gate", address="Lalbagh Road, Bangalore", opening_hours="06:00-19:00", wheelchair=None)
+
+    with patch("src.agents.search.osm_lookup", new=AsyncMock(return_value=mock_result)):
+        out = await _dispatch_tool("osm_nearby", {"lat": 12.95, "lng": 77.58, "radius_m": 50})
+
+    data = json.loads(out)
+    assert data["name"] == "Lalbagh Gate"
+    assert "Bangalore" in data["address"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_unknown_returns_error():
+    from src.agents.search import _dispatch_tool
+
+    out = await _dispatch_tool("nonexistent_tool", {})
+    data = json.loads(out)
+    assert "error" in data
+    assert "Unknown tool" in data["error"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_exception_returns_error_json():
+    from src.agents.search import _dispatch_tool
+
+    with patch("src.agents.search.wikipedia_search", new=AsyncMock(side_effect=RuntimeError("network down"))):
+        out = await _dispatch_tool("wikipedia_summary", {"entity": "anything"})
+
+    data = json.loads(out)
+    assert "error" in data
+    assert "network down" in data["error"]

@@ -137,3 +137,74 @@ async def test_ttl_is_30_days(tmp_db):
     expires = datetime.fromisoformat(row[1])
     delta = expires - created
     assert delta.days == db_module.MEMORY_TTL_DAYS
+
+
+# ---------------------------------------------------------------------------
+# upsert_interest — exponential decay scoring
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_upsert_interest_creates_entry(tmp_db):
+    await db_module.upsert_interest("u1", "architecture")
+    interests = await db_module.get_user_interests("u1")
+    assert "architecture" in interests
+    assert interests["architecture"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_upsert_interest_decays_on_repeat(tmp_db):
+    await db_module.upsert_interest("u1", "history")
+    await db_module.upsert_interest("u1", "history")
+    interests = await db_module.get_user_interests("u1")
+    # Second call: new_score = 1.0 * 0.9 + 1.0 = 1.9
+    assert interests["history"] == pytest.approx(1.9)
+
+
+@pytest.mark.asyncio
+async def test_upsert_interest_multiple_users_isolated(tmp_db):
+    await db_module.upsert_interest("u1", "botany")
+    await db_module.upsert_interest("u2", "sculpture")
+    u1 = await db_module.get_user_interests("u1")
+    u2 = await db_module.get_user_interests("u2")
+    assert "botany" in u1 and "sculpture" not in u1
+    assert "sculpture" in u2 and "botany" not in u2
+
+
+@pytest.mark.asyncio
+async def test_upsert_interest_multiple_categories(tmp_db):
+    await db_module.upsert_interest("u1", "architecture")
+    await db_module.upsert_interest("u1", "history")
+    interests = await db_module.get_user_interests("u1")
+    assert len(interests) == 2
+
+
+# ---------------------------------------------------------------------------
+# write_cost_entry — persists cost entries to SQLite
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_write_cost_entry_writes_row(tmp_db):
+    import sqlite3
+    await db_module.write_cost_entry(
+        agent="vision", model="gemini-2.0-flash",
+        input_tokens=100, output_tokens=50, cost_usd=0.000038,
+    )
+    conn = sqlite3.connect(tmp_db)
+    row = conn.execute("SELECT agent, model, input_tokens, output_tokens, cost_usd FROM cost_log").fetchone()
+    conn.close()
+    assert row[0] == "vision"
+    assert row[1] == "gemini-2.0-flash"
+    assert row[2] == 100
+    assert row[3] == 50
+    assert row[4] == pytest.approx(0.000038)
+
+
+@pytest.mark.asyncio
+async def test_write_cost_entry_multiple_entries(tmp_db):
+    import sqlite3
+    await db_module.write_cost_entry("vision", "gemini-2.0-flash", 100, 50, 0.001)
+    await db_module.write_cost_entry("search", "gemini-2.0-flash", 200, 80, 0.002)
+    conn = sqlite3.connect(tmp_db)
+    count = conn.execute("SELECT COUNT(*) FROM cost_log").fetchone()[0]
+    conn.close()
+    assert count == 2
