@@ -29,5 +29,9 @@ lens_memory.db
 .pytest_cache/
 .ruff_cache/
 
+# Coverage
+.coverage
+htmlcov/
+
 # Streamlit
 .streamlit/
