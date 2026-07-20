@@ -1,0 +1,9 @@
+[run]
+source = src
+omit =
+    src/inspector.py
+    src/main.py
+
+[report]
+show_missing = true
+fail_under = 90
