@@ -85,7 +85,7 @@ async def main() -> None:
         # Non-streaming: wait for full card, dump JSON
         try:
             state = await run_pipeline(inp)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print("Error: pipeline exceeded 2.5s overall timeout", file=sys.stderr)
             sys.exit(1)
         card = state.get("response_card")
@@ -105,7 +105,7 @@ async def main() -> None:
                     final_state = state
                 else:
                     print(chunk, end="", flush=True)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print("\nError: pipeline exceeded timeout", file=sys.stderr)
             sys.exit(1)
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+
 import httpx
+
 from src.contracts import TavilyResult, ToolError
 
 _TIMEOUT_S = 0.5
@@ -25,7 +27,7 @@ async def tavily_search(query: str) -> TavilyResult:
             results = [{"title": r.get("title", ""), "url": r.get("url", ""),
                         "content": r.get("content", "")} for r in data.get("results", [])]
             return TavilyResult(query=query, results=results)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise ToolError("tavily_search", "timed out") from exc
     except httpx.HTTPError as exc:
         raise ToolError("tavily_search", str(exc)) from exc

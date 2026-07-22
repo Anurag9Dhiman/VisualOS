@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+
 import httpx
+
 from src.contracts import OSMResult, ToolError
 
 _TIMEOUT_S = 0.4
@@ -36,7 +38,7 @@ async def osm_lookup(lat: float, lng: float, radius_m: int = 50) -> OSMResult:
             return OSMResult(name=tags.get("name"), address=address,
                              opening_hours=tags.get("opening_hours"),
                              wheelchair=tags.get("wheelchair"))
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise ToolError("osm_lookup", "timed out") from exc
     except httpx.HTTPError as exc:
         raise ToolError("osm_lookup", str(exc)) from exc

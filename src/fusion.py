@@ -6,10 +6,12 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import AsyncIterator
 
 from google import genai
 from google.genai import types
 
+from src import rate_limiter
 from src.contracts import (
     Citation,
     CostEntry,
@@ -24,8 +26,6 @@ from src.contracts import (
 )
 from src.cost_logger import log_cost
 from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
-from src import rate_limiter
-from typing import AsyncIterator
 
 logger = logging.getLogger("lens.fusion")
 
@@ -101,7 +101,7 @@ async def run_fusion(
             ),
             timeout=_TIMEOUT_S,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("Fusion timed out, returning fallback")
         return FallbackCard(
             headline="Could not compose a response in time.",

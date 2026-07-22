@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
 
 from google import genai
 
+from src import db, rate_limiter
 from src.contracts import CostEntry, MemoryHit, MemoryResult
 from src.cost_logger import log_cost
-from src import db, rate_limiter
 from src.db import get_user_interests
 
 logger = logging.getLogger("lens.memory")

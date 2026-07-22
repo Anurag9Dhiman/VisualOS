@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+
 import httpx
+
 from src.contracts import ToolError, WikidataResult
 
 _TIMEOUT_S = 0.4
@@ -39,7 +41,7 @@ async def wikidata_lookup(entity_id: str) -> WikidataResult:
                 facts=facts,
                 url=f"https://www.wikidata.org/wiki/{entity_id}",
             )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise ToolError("wikidata_lookup", "timed out") from exc
     except httpx.HTTPError as exc:
         raise ToolError("wikidata_lookup", str(exc)) from exc

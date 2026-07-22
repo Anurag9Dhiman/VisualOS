@@ -20,12 +20,10 @@ from PIL import Image
 
 from src.contracts import (
     FallbackCard,
-    MemoryHit,
     NormalCard,
     SearchResult,
     VisionResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,8 +156,8 @@ async def test_vision_agent_logs_cost(monkeypatch):
 @pytest.mark.asyncio
 async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    from src.agents.memory import run_memory_agent
     from src import db
+    from src.agents.memory import run_memory_agent
 
     # Pre-seed the db with a high-similarity interaction
     embed = [0.5] * 8
@@ -185,8 +183,8 @@ async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
 @pytest.mark.asyncio
 async def test_memory_agent_filters_low_similarity(monkeypatch, tmp_db):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    from src.agents.memory import run_memory_agent
     from src import db
+    from src.agents.memory import run_memory_agent
 
     # Seed with an orthogonal embedding — similarity will be ~0
     await db.write_interaction("u1", "Red Fort", "Mughal fort.", [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -345,8 +343,8 @@ _VALID_FALLBACK_JSON = {
 @pytest.mark.asyncio
 async def test_fusion_returns_normal_card(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    from src.contracts import MemoryResult, VisionResult
     from src.fusion import run_fusion
-    from src.contracts import VisionResult, MemoryResult
 
     vision = VisionResult(**_VALID_VISION_JSON)
     memory = MemoryResult(hits=[], user_id="u1")

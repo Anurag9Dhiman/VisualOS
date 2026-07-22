@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 from pydantic import ValidationError
 
 from src.contracts import (
     FallbackCard,
-    HistoricalFact,
-    LiveFact,
     MemoryHit,
     MemoryResult,
     NormalCard,
     PersonalizedHook,
     SearchResult,
     SourceMix,
-    ToolCallRecord,
     VisionResult,
 )
-from datetime import datetime
-
 
 # ---------------------------------------------------------------------------
 # VisionResult

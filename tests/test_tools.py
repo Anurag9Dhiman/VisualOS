@@ -9,14 +9,12 @@ Each client wraps httpx.AsyncClient with asyncio.wait_for. Tests verify:
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from src.contracts import ToolError
-
 
 # ---------------------------------------------------------------------------
 # Helper — build a fake httpx response
@@ -90,7 +88,7 @@ async def test_wikipedia_search_timeout():
     from src.tools.wikipedia_client import wikipedia_search
 
     mc = _mock_client()
-    mc.get = AsyncMock(side_effect=asyncio.TimeoutError())
+    mc.get = AsyncMock(side_effect=TimeoutError())
 
     with patch("src.tools.wikipedia_client.httpx.AsyncClient", return_value=mc):
         with pytest.raises(ToolError, match="timed out"):
@@ -158,7 +156,7 @@ async def test_wikidata_lookup_timeout():
     from src.tools.wikidata_client import wikidata_lookup
 
     mc = _mock_client()
-    mc.get = AsyncMock(side_effect=asyncio.TimeoutError())
+    mc.get = AsyncMock(side_effect=TimeoutError())
 
     with patch("src.tools.wikidata_client.httpx.AsyncClient", return_value=mc):
         with pytest.raises(ToolError, match="timed out"):
@@ -206,8 +204,9 @@ async def test_tavily_search_success(monkeypatch):
 @pytest.mark.asyncio
 async def test_tavily_search_missing_api_key(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    from src.tools import tavily_client
     import importlib
+
+    from src.tools import tavily_client
     importlib.reload(tavily_client)  # reload so os.environ.get picks up change
     from src.tools.tavily_client import tavily_search
 
@@ -221,7 +220,7 @@ async def test_tavily_search_timeout(monkeypatch):
     from src.tools.tavily_client import tavily_search
 
     mc = _mock_client()
-    mc.post = AsyncMock(side_effect=asyncio.TimeoutError())
+    mc.post = AsyncMock(side_effect=TimeoutError())
 
     with patch("src.tools.tavily_client.httpx.AsyncClient", return_value=mc):
         with pytest.raises(ToolError, match="timed out"):
@@ -306,7 +305,7 @@ async def test_osm_lookup_timeout():
     from src.tools.osm_client import osm_lookup
 
     mc = _mock_client()
-    mc.post = AsyncMock(side_effect=asyncio.TimeoutError())
+    mc.post = AsyncMock(side_effect=TimeoutError())
 
     with patch("src.tools.osm_client.httpx.AsyncClient", return_value=mc):
         with pytest.raises(ToolError, match="timed out"):
