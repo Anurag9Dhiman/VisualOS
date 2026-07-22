@@ -10,6 +10,7 @@ import os
 from google import genai
 from google.genai import types
 
+from src import rate_limiter
 from src.contracts import (
     CostEntry,
     HistoricalFact,
@@ -18,12 +19,11 @@ from src.contracts import (
     ToolCallRecord,
 )
 from src.cost_logger import log_cost
-from src.prompts import GeoPoint, SEARCH_SYSTEM_PROMPT, build_search_user_message
-from src import rate_limiter
-from src.tools.wikipedia_client import wikipedia_search
-from src.tools.wikidata_client import wikidata_lookup
-from src.tools.tavily_client import tavily_search
+from src.prompts import SEARCH_SYSTEM_PROMPT, GeoPoint, build_search_user_message
 from src.tools.osm_client import osm_lookup
+from src.tools.tavily_client import tavily_search
+from src.tools.wikidata_client import wikidata_lookup
+from src.tools.wikipedia_client import wikipedia_search
 
 logger = logging.getLogger("lens.search")
 
@@ -119,7 +119,7 @@ async def run_search_agent(
             ),
             timeout=_TIMEOUT_S,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("Search agent timed out for '%s'", entity_name)
         return SearchResult(
             research_plan="Timed out.",

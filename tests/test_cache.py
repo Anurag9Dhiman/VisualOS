@@ -15,7 +15,6 @@ import pytest
 
 from src import cache as cache_mod
 
-
 # ---------------------------------------------------------------------------
 # Fixture: initialise cache against the tmp_db from conftest
 # ---------------------------------------------------------------------------

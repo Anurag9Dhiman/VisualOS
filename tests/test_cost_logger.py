@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.cost_logger import compute_cost, log_cost
 
 
@@ -39,6 +41,3 @@ def test_log_cost_returns_entry():
     assert entry.cost_usd == pytest.approx(
         compute_cost("gemini-2.0-flash", 500, 200), rel=1e-9
     )
-
-
-import pytest

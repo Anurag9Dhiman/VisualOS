@@ -13,7 +13,6 @@ import pytest
 
 from src.contracts import FallbackCard, NormalCard
 
-
 # ---------------------------------------------------------------------------
 # _parse_card — shared JSON → ResponseCard parser
 # ---------------------------------------------------------------------------
@@ -116,15 +115,6 @@ async def test_stream_fusion_yields_chunks_then_card(monkeypatch):
     from src.fusion import stream_fusion
 
     parts = ['"card_type": "normal"', ', "headline": "Eiffel"', ', "body": "tall tower."']
-    full_json = json.dumps({
-        "card_type": "normal",
-        "headline": "Eiffel",
-        "body": "tall tower.",
-        "personalized_hooks": [],
-        "citations": [],
-        "confidence_displayed": "high",
-        "source_mix": {"used_vision": True, "used_memory": False, "used_search": True},
-    })
     chunks = [
         _make_stream_chunk(p) for p in ["{", *parts, "}"]
     ]

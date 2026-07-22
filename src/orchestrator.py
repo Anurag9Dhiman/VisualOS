@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import TypedDict
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END, StateGraph
 from langsmith import traceable
-from langgraph.graph import StateGraph, END
 
 from src.contracts import (
     CostEntry,
@@ -50,8 +50,8 @@ def plan_node(state: LensState) -> LensState:
     inp = state["input"]
     image_data = Path(inp.image_path).read_bytes()
     image_b64 = base64.b64encode(image_data).decode()
-    from src.cache import make_cache_key
     from src.agents.vision import _preprocess_image
+    from src.cache import make_cache_key
     preprocessed = _preprocess_image(image_b64)
     cache_key = make_cache_key(preprocessed, inp.lat, inp.lng)
     return {
@@ -210,9 +210,11 @@ async def _write_memory_async(
     entity_type: str = "unknown",
 ) -> None:
     import os
+
     from google import genai
-    from src.cost_logger import log_cost
+
     from src import db
+    from src.cost_logger import log_cost
 
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     try:

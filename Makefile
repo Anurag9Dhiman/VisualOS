@@ -1,4 +1,4 @@
-.PHONY: setup test cov typecheck run inspect clean
+.PHONY: setup test cov lint format typecheck run inspect clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -12,6 +12,13 @@ test:
 
 cov:
 	pytest --cov=src --cov-report=term-missing -q
+
+lint:
+	ruff check src/ tests/
+
+format:
+	ruff format src/ tests/
+	ruff check src/ tests/ --fix
 
 typecheck:
 	mypy src/ --ignore-missing-imports

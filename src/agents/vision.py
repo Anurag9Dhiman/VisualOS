@@ -13,10 +13,10 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
+from src import rate_limiter
 from src.contracts import CostEntry, VisionResult
 from src.cost_logger import log_cost
-from src.prompts import GeoPoint, VISION_SYSTEM_PROMPT
-from src import rate_limiter
+from src.prompts import VISION_SYSTEM_PROMPT, GeoPoint
 
 logger = logging.getLogger("lens.vision")
 

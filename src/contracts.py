@@ -7,7 +7,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # ---------------------------------------------------------------------------
 # Shared primitives
 # ---------------------------------------------------------------------------
@@ -57,7 +56,7 @@ class VisionResult(BaseModel):
     needs_fallback: bool
 
     @model_validator(mode="after")
-    def _guessing_requires_fallback(self) -> "VisionResult":
+    def _guessing_requires_fallback(self) -> VisionResult:
         if self.confidence_level == "guessing" and not self.needs_fallback:
             raise ValueError("needs_fallback must be True when confidence_level is 'guessing'")
         return self
@@ -121,7 +120,7 @@ class SearchResult(BaseModel):
     nearby_context: str = ""
 
     @model_validator(mode="after")
-    def _validate_budget_and_skipped(self) -> "SearchResult":
+    def _validate_budget_and_skipped(self) -> SearchResult:
         if len(self.tool_calls) > 3:
             raise ValueError("tool_calls must not exceed 3 (budget limit)")
         if not self.live_facts and not self.live_facts_skipped_reason:

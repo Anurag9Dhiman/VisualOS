@@ -11,7 +11,6 @@ Run with:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -41,10 +40,10 @@ def _run(coro):
 
 def run_pipeline_sync(image_bytes: bytes, lat: float | None, lng: float | None, user_id: str):
     """Save image to a temp file and run the full pipeline."""
-    from src.contracts import LensInput
-    from src.orchestrator import run_pipeline
     from src import db
     from src.cache import init_cache
+    from src.contracts import LensInput
+    from src.orchestrator import run_pipeline
 
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
         f.write(image_bytes)

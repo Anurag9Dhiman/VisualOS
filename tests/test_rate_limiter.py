@@ -9,7 +9,6 @@ import pytest
 
 from src import rate_limiter
 
-
 # ---------------------------------------------------------------------------
 # Basic slot acquisition
 # ---------------------------------------------------------------------------
@@ -42,8 +41,6 @@ async def test_exceeding_limit_causes_wait(monkeypatch):
     """Fill the window, then verify the next call sleeps."""
     rate_limiter.set_limit("slow-model", 2)
     slept: list[float] = []
-
-    original_sleep = asyncio.sleep
 
     async def mock_sleep(s: float) -> None:
         slept.append(s)

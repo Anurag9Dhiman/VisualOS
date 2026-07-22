@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+
 import httpx
+
 from src.contracts import ToolError, WikipediaResult
 
 _TIMEOUT_S = 0.4
@@ -33,7 +35,7 @@ async def wikipedia_search(query: str) -> WikipediaResult:
                 extract=sdata.get("extract", ""),
                 url=sdata.get("content_urls", {}).get("desktop", {}).get("page", ""),
             )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise ToolError("wikipedia_search", "timed out") from exc
     except httpx.HTTPError as exc:
         raise ToolError("wikipedia_search", str(exc)) from exc
