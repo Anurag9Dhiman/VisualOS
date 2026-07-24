@@ -46,12 +46,14 @@ class LensState(TypedDict):
 # Nodes
 # ---------------------------------------------------------------------------
 
+
 def plan_node(state: LensState) -> LensState:
     inp = state["input"]
     image_data = Path(inp.image_path).read_bytes()
     image_b64 = base64.b64encode(image_data).decode()
     from src.agents.vision import _preprocess_image
     from src.cache import make_cache_key
+
     preprocessed = _preprocess_image(image_b64)
     cache_key = make_cache_key(preprocessed, inp.lat, inp.lng)
     return {
@@ -70,6 +72,7 @@ def plan_node(state: LensState) -> LensState:
 
 async def _safe_vision(state: LensState) -> VisionResult | None:
     from src.agents.vision import run_vision_agent
+
     try:
         return await run_vision_agent(
             state["image_b64"], state["input"].lat, state["input"].lng, state["cost_log"]
@@ -82,6 +85,7 @@ async def _safe_vision(state: LensState) -> VisionResult | None:
 
 async def _safe_memory(state: LensState, subject_name: str) -> MemoryResult | None:
     from src.agents.memory import run_memory_agent
+
     try:
         return await run_memory_agent(subject_name, state["input"].user_id, state["cost_log"])
     except Exception as exc:
@@ -96,6 +100,7 @@ async def _safe_search(
     memory: MemoryResult | None,
 ) -> SearchResult | None:
     from src.agents.search import run_search_agent
+
     entity_name = vision.entity_name if vision else "unknown entity"
     entity_type = vision.entity_type if vision else "unknown"
     confidence_level = vision.confidence_level if vision else "guessing"
@@ -118,16 +123,17 @@ async def _safe_search(
 
 async def cache_check_node(state: LensState) -> LensState:
     from src.cache import cache_get
+
     cached = await cache_get(state["_cache_key"])
     if cached is None:
         return state
     card_type = cached.get("card_type", "normal")
     if card_type == "fallback":
-        card: ResponseCard = FallbackCard(**{k: v for k, v in cached.items()
-                                            if k in FallbackCard.model_fields})
+        card: ResponseCard = FallbackCard(
+            **{k: v for k, v in cached.items() if k in FallbackCard.model_fields}
+        )
     else:
-        card = NormalCard(**{k: v for k, v in cached.items()
-                             if k in NormalCard.model_fields})
+        card = NormalCard(**{k: v for k, v in cached.items() if k in NormalCard.model_fields})
     logger.info("Returning cached card — skipping all agents")
     return {**state, "response_card": card}
 
@@ -148,9 +154,11 @@ def _should_search(state: LensState) -> str:
     """Skip Search entirely when Vision has no useful identification."""
     vision = state["vision_result"]
     if vision is None or vision.needs_fallback or vision.confidence_level == "guessing":
-        logger.info("Confidence gate: skipping Search (confidence=%s, needs_fallback=%s)",
-                    vision.confidence_level if vision else "none",
-                    vision.needs_fallback if vision else True)
+        logger.info(
+            "Confidence gate: skipping Search (confidence=%s, needs_fallback=%s)",
+            vision.confidence_level if vision else "none",
+            vision.needs_fallback if vision else True,
+        )
         return "fuse"
     return "search"
 
@@ -181,6 +189,7 @@ async def fuse_node(state: LensState) -> LensState:
 
 async def _write_cache_async(cache_key: str, card: ResponseCard) -> None:
     from src.cache import cache_set
+
     try:
         await cache_set(cache_key, card.model_dump())
     except Exception as exc:
@@ -206,7 +215,10 @@ async def write_memory_node(state: LensState) -> LensState:
 
 
 async def _write_memory_async(
-    user_id: str, subject_name: str, summary: str, cost_log: list[CostEntry],
+    user_id: str,
+    subject_name: str,
+    summary: str,
+    cost_log: list[CostEntry],
     entity_type: str = "unknown",
 ) -> None:
     import os
@@ -240,6 +252,7 @@ async def _write_memory_async(
 # Graph
 # ---------------------------------------------------------------------------
 
+
 def _build_graph() -> StateGraph:
     g = StateGraph(LensState)
     g.add_node("plan", plan_node)
@@ -250,8 +263,11 @@ def _build_graph() -> StateGraph:
     g.add_node("write_memory", write_memory_node)
     g.set_entry_point("plan")
     g.add_edge("plan", "cache_check")
-    g.add_conditional_edges("cache_check", _should_run_agents,
-                            {"vision_memory": "vision_memory", "done": "write_memory"})
+    g.add_conditional_edges(
+        "cache_check",
+        _should_run_agents,
+        {"vision_memory": "vision_memory", "done": "write_memory"},
+    )
     g.add_conditional_edges("vision_memory", _should_search, {"search": "search", "fuse": "fuse"})
     g.add_edge("search", "fuse")
     g.add_edge("fuse", "write_memory")
@@ -295,10 +311,16 @@ async def stream_pipeline(inp: LensInput):
     image_b64 = base64.b64encode(image_data).decode()
 
     fake_state: LensState = {
-        "input": inp, "image_b64": image_b64,
-        "vision_result": None, "memory_result": None, "search_result": None,
-        "response_card": None, "cost_log": cost_log, "errors": errors,
-        "_start_time": start, "_cache_key": "",
+        "input": inp,
+        "image_b64": image_b64,
+        "vision_result": None,
+        "memory_result": None,
+        "search_result": None,
+        "response_card": None,
+        "cost_log": cost_log,
+        "errors": errors,
+        "_start_time": start,
+        "_cache_key": "",
     }
 
     vision_result, memory_result = await asyncio.gather(
@@ -307,7 +329,11 @@ async def stream_pipeline(inp: LensInput):
     )
 
     search_result = None
-    if vision_result and not vision_result.needs_fallback and vision_result.confidence_level != "guessing":
+    if (
+        vision_result
+        and not vision_result.needs_fallback
+        and vision_result.confidence_level != "guessing"
+    ):
         search_result = await _safe_search(fake_state, vision_result, memory_result)
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -315,8 +341,13 @@ async def stream_pipeline(inp: LensInput):
 
     final_card = None
     async for chunk, card in stream_fusion(
-        vision_result, memory_result, search_result,
-        cost_log, cost_usd_so_far, elapsed_ms, inp.user_locale,
+        vision_result,
+        memory_result,
+        search_result,
+        cost_log,
+        cost_usd_so_far,
+        elapsed_ms,
+        inp.user_locale,
     ):
         if card is not None:
             final_card = card
@@ -335,6 +366,7 @@ async def stream_pipeline(inp: LensInput):
 async def run_pipeline(inp: LensInput) -> LensState:
     from src import db
     from src.cache import init_cache
+
     db.init_db()
     init_cache(db.DB_PATH)
     initial: LensState = {

@@ -4,6 +4,7 @@
 setup:
 	python3 -m venv .venv
 	.venv/bin/pip install -r requirements.txt
+	.venv/bin/pre-commit install
 	@cp -n .env.example .env 2>/dev/null && echo "Created .env — fill in GOOGLE_API_KEY" || echo ".env already exists"
 
 # ── Quality ──────────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ cov:
 	pytest --cov=src --cov-report=term-missing -q
 
 lint:
+	ruff format --check src/ tests/
 	ruff check src/ tests/
 
 format:

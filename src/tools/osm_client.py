@@ -32,12 +32,19 @@ async def osm_lookup(lat: float, lng: float, radius_m: int = 50) -> OSMResult:
             if not elements:
                 return OSMResult(name=None, address=None, opening_hours=None, wheelchair=None)
             tags = elements[0].get("tags", {})
-            address_parts = [tags.get("addr:housenumber", ""), tags.get("addr:street", ""),
-                             tags.get("addr:city", ""), tags.get("addr:country", "")]
+            address_parts = [
+                tags.get("addr:housenumber", ""),
+                tags.get("addr:street", ""),
+                tags.get("addr:city", ""),
+                tags.get("addr:country", ""),
+            ]
             address = ", ".join(p for p in address_parts if p) or None
-            return OSMResult(name=tags.get("name"), address=address,
-                             opening_hours=tags.get("opening_hours"),
-                             wheelchair=tags.get("wheelchair"))
+            return OSMResult(
+                name=tags.get("name"),
+                address=address,
+                opening_hours=tags.get("opening_hours"),
+                wheelchair=tags.get("wheelchair"),
+            )
     except TimeoutError as exc:
         raise ToolError("osm_lookup", "timed out") from exc
     except httpx.HTTPError as exc:

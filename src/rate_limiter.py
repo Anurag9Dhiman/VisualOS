@@ -65,8 +65,7 @@ async def acquire(model: str) -> None:
             # How long until the oldest call rolls off the window
             wait_s = _WINDOW_S - (now - window[0]) + 0.05
 
-        logger.warning("Rate limit reached for %s (%d RPM) — sleeping %.1fs",
-                       model, limit, wait_s)
+        logger.warning("Rate limit reached for %s (%d RPM) — sleeping %.1fs", model, limit, wait_s)
         await asyncio.sleep(wait_s)
 
 

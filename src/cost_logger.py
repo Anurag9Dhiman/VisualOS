@@ -35,13 +35,15 @@ def log_cost(agent: str, model: str, input_tokens: int, output_tokens: int) -> C
         timestamp=datetime.utcnow(),
     )
     logger.info(
-        json.dumps({
-            "event": "llm_cost",
-            "agent": agent,
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "cost_usd": round(cost, 6),
-        })
+        json.dumps(
+            {
+                "event": "llm_cost",
+                "agent": agent,
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": round(cost, 6),
+            }
+        )
     )
     return entry

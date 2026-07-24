@@ -13,6 +13,7 @@ from src import rate_limiter
 # Basic slot acquisition
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_acquire_within_limit_is_instant():
     rate_limiter.set_limit("test-model", 5)
@@ -35,6 +36,7 @@ async def test_acquire_records_timestamps():
 # ---------------------------------------------------------------------------
 # Rate limit enforcement
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_exceeding_limit_causes_wait(monkeypatch):
@@ -67,6 +69,7 @@ async def test_exceeding_limit_causes_wait(monkeypatch):
 # set_limit override
 # ---------------------------------------------------------------------------
 
+
 def test_set_limit_overrides_default():
     rate_limiter.set_limit("gemini-2.0-flash", 100)
     assert rate_limiter._LIMITS["gemini-2.0-flash"] == 100
@@ -77,6 +80,7 @@ def test_set_limit_overrides_default():
 # ---------------------------------------------------------------------------
 # reset
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_reset_clears_single_model():
@@ -107,6 +111,7 @@ async def test_reset_all_clears_everything():
 # Parallel callers don't deadlock
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_parallel_acquires_no_deadlock():
     rate_limiter.set_limit("parallel-model", 20)
@@ -118,6 +123,7 @@ async def test_parallel_acquires_no_deadlock():
 # ---------------------------------------------------------------------------
 # Default RPM fallback
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_unknown_model_uses_default_limit():

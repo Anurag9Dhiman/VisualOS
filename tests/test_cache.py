@@ -19,6 +19,7 @@ from src import cache as cache_mod
 # Fixture: initialise cache against the tmp_db from conftest
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def cache(tmp_db: Path):
     """Initialise the cache module against the temp DB for each test."""
@@ -31,6 +32,7 @@ def cache(tmp_db: Path):
 # ---------------------------------------------------------------------------
 # make_cache_key
 # ---------------------------------------------------------------------------
+
 
 def test_cache_key_is_deterministic():
     img = b"fake-image-bytes"
@@ -126,6 +128,7 @@ async def test_cache_stores_full_card_structure(cache):
 # TTL enforcement
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_cache_get_returns_none_for_expired_entry(cache, tmp_db: Path):
     key = "expired-key"
@@ -163,6 +166,7 @@ async def test_cache_ttl_is_24_hours(cache, tmp_db: Path):
 # ---------------------------------------------------------------------------
 # Not-initialised guard
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_cache_get_raises_if_not_initialised():
