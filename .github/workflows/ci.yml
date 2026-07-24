@@ -40,7 +40,7 @@ jobs:
           cache: pip
 
       - name: Install ruff
-        run: pip install ruff>=0.6.0
+        run: pip install "ruff==0.15.22"
 
       - name: Check formatting
         run: ruff format --check src/ tests/
