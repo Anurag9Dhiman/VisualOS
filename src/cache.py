@@ -50,6 +50,7 @@ def make_cache_key(image_bytes: bytes, lat: float | None, lng: float | None) -> 
 
 async def cache_get(cache_key: str) -> dict | None:
     """Return cached card dict or None on miss/expiry."""
+
     def _get() -> dict | None:
         if _DB_PATH is None:
             raise RuntimeError("cache not initialised — call init_cache() first")
@@ -75,6 +76,7 @@ async def cache_get(cache_key: str) -> dict | None:
 
 async def cache_set(cache_key: str, card_dict: dict) -> None:
     """Store a card dict with a 24-hour TTL."""
+
     def _set() -> None:
         if _DB_PATH is None:
             raise RuntimeError("cache not initialised — call init_cache() first")

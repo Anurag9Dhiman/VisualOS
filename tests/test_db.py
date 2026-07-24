@@ -18,6 +18,7 @@ def _make_embedding(dim: int = 8, value: float = 0.5) -> list[float]:
 # write_interaction / search_interactions
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_write_and_search(tmp_db):
     embed = _make_embedding()
@@ -45,9 +46,7 @@ async def test_search_returns_top_k(tmp_db):
             embedding=_make_embedding(value=i * 0.1 + 0.1),
         )
 
-    results = await db_module.search_interactions(
-        "u1", _make_embedding(value=0.5), top_k=3
-    )
+    results = await db_module.search_interactions("u1", _make_embedding(value=0.5), top_k=3)
     assert len(results) == 3
 
 
@@ -63,6 +62,7 @@ async def test_search_excludes_other_user(tmp_db):
 async def test_expired_interactions_excluded(tmp_db, monkeypatch):
     # Write an interaction that is already expired
     import sqlite3
+
     conn = sqlite3.connect(tmp_db)
     past = (datetime.utcnow() - timedelta(days=1)).isoformat()
     embed_blob = struct.pack("8f", *_make_embedding())
@@ -82,6 +82,7 @@ async def test_expired_interactions_excluded(tmp_db, monkeypatch):
 # Embedding round-trip
 # ---------------------------------------------------------------------------
 
+
 def test_embed_blob_roundtrip():
     original = [0.1, 0.2, 0.3, -0.5, 1.0]
     blob = db_module._embed_to_blob(original)
@@ -94,6 +95,7 @@ def test_embed_blob_roundtrip():
 # ---------------------------------------------------------------------------
 # Cosine similarity
 # ---------------------------------------------------------------------------
+
 
 def test_cosine_identical_vectors():
     v = [1.0, 0.0, 0.0]
@@ -120,9 +122,11 @@ def test_cosine_zero_vector():
 # TTL — interactions expire after 30 days
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_ttl_is_30_days(tmp_db):
     import sqlite3
+
     embed = _make_embedding()
     iid = await db_module.write_interaction("u1", "Test", "s", embed)
 
@@ -141,6 +145,7 @@ async def test_ttl_is_30_days(tmp_db):
 # ---------------------------------------------------------------------------
 # upsert_interest — exponential decay scoring
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_upsert_interest_creates_entry(tmp_db):
@@ -181,15 +186,22 @@ async def test_upsert_interest_multiple_categories(tmp_db):
 # write_cost_entry — persists cost entries to SQLite
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_write_cost_entry_writes_row(tmp_db):
     import sqlite3
+
     await db_module.write_cost_entry(
-        agent="vision", model="gemini-2.0-flash",
-        input_tokens=100, output_tokens=50, cost_usd=0.000038,
+        agent="vision",
+        model="gemini-2.0-flash",
+        input_tokens=100,
+        output_tokens=50,
+        cost_usd=0.000038,
     )
     conn = sqlite3.connect(tmp_db)
-    row = conn.execute("SELECT agent, model, input_tokens, output_tokens, cost_usd FROM cost_log").fetchone()
+    row = conn.execute(
+        "SELECT agent, model, input_tokens, output_tokens, cost_usd FROM cost_log"
+    ).fetchone()
     conn.close()
     assert row[0] == "vision"
     assert row[1] == "gemini-2.0-flash"
@@ -201,6 +213,7 @@ async def test_write_cost_entry_writes_row(tmp_db):
 @pytest.mark.asyncio
 async def test_write_cost_entry_multiple_entries(tmp_db):
     import sqlite3
+
     await db_module.write_cost_entry("vision", "gemini-2.0-flash", 100, 50, 0.001)
     await db_module.write_cost_entry("search", "gemini-2.0-flash", 200, 80, 0.002)
     conn = sqlite3.connect(tmp_db)

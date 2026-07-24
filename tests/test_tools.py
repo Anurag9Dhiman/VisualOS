@@ -20,6 +20,7 @@ from src.contracts import ToolError
 # Helper — build a fake httpx response
 # ---------------------------------------------------------------------------
 
+
 def _httpx_resp(json_data: dict, status: int = 200) -> MagicMock:
     resp = MagicMock()
     resp.status_code = status
@@ -181,7 +182,7 @@ async def test_wikidata_lookup_http_error():
 _TAVILY_RESPONSE = {
     "results": [
         {"title": "Eiffel Tower tickets", "url": "https://example.com/1", "content": "Book now."},
-        {"title": "Eiffel Tower hours",   "url": "https://example.com/2", "content": "Open daily."},
+        {"title": "Eiffel Tower hours", "url": "https://example.com/2", "content": "Open daily."},
     ]
 }
 
@@ -207,6 +208,7 @@ async def test_tavily_search_missing_api_key(monkeypatch):
     import importlib
 
     from src.tools import tavily_client
+
     importlib.reload(tavily_client)  # reload so os.environ.get picks up change
     from src.tools.tavily_client import tavily_search
 
@@ -244,16 +246,18 @@ async def test_tavily_search_http_error(monkeypatch):
 # ---------------------------------------------------------------------------
 
 _OSM_ELEMENT = {
-    "elements": [{
-        "tags": {
-            "name": "Lalbagh West Gate",
-            "addr:street": "Lalbagh Road",
-            "addr:city": "Bangalore",
-            "addr:country": "IN",
-            "opening_hours": "Mo-Su 06:00-19:00",
-            "wheelchair": "yes",
+    "elements": [
+        {
+            "tags": {
+                "name": "Lalbagh West Gate",
+                "addr:street": "Lalbagh Road",
+                "addr:city": "Bangalore",
+                "addr:country": "IN",
+                "opening_hours": "Mo-Su 06:00-19:00",
+                "wheelchair": "yes",
+            }
         }
-    }]
+    ]
 }
 
 

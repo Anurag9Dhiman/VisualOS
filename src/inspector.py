@@ -25,6 +25,7 @@ load_dotenv()
 # Async bridge — Streamlit is sync; the pipeline is async
 # ---------------------------------------------------------------------------
 
+
 def _run(coro):
     """Execute an async coroutine in a dedicated event loop."""
     loop = asyncio.new_event_loop()
@@ -37,6 +38,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
+
 
 def run_pipeline_sync(image_bytes: bytes, lat: float | None, lng: float | None, user_id: str):
     """Save image to a temp file and run the full pipeline."""
@@ -66,6 +68,7 @@ def run_pipeline_sync(image_bytes: bytes, lat: float | None, lng: float | None, 
 # ---------------------------------------------------------------------------
 # Display helpers
 # ---------------------------------------------------------------------------
+
 
 def _confidence_badge(level: str) -> str:
     colours = {
@@ -114,7 +117,9 @@ def _show_memory(memory) -> None:
     if memory.hits:
         st.markdown(f"**{len(memory.hits)} memory hit(s)**")
         for h in memory.hits:
-            st.markdown(f"- **{h.subject_name}** (score {h.similarity_score:.2f}): {h.summary[:80]}…")
+            st.markdown(
+                f"- **{h.subject_name}** (score {h.similarity_score:.2f}): {h.summary[:80]}…"
+            )
     else:
         st.markdown("No prior interactions found for this user.")
 
@@ -162,10 +167,13 @@ def _show_card(card) -> None:
             for h in card.personalized_hooks:
                 st.markdown(f"- {h.fact}")
         if card.citations:
-            st.markdown("**Sources:** " + " · ".join(
-                f"[{c.source_name}]({c.url})" if c.url else c.source_name
-                for c in card.citations
-            ))
+            st.markdown(
+                "**Sources:** "
+                + " · ".join(
+                    f"[{c.source_name}]({c.url})" if c.url else c.source_name
+                    for c in card.citations
+                )
+            )
         st.markdown(
             f"Confidence: `{card.confidence_displayed}` · "
             f"Vision: {'✓' if card.source_mix.used_vision else '–'} · "
@@ -198,6 +206,7 @@ def _show_cost_log(cost_log) -> None:
 # ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     st.set_page_config(page_title="Lens OS Inspector", page_icon="🔍", layout="wide")
@@ -279,12 +288,14 @@ def main() -> None:
         _show_cost_log(cost_log)
 
     with tab_raw:
-        st.json({
-            "card": card.model_dump() if card else None,
-            "vision": vision.model_dump() if vision else None,
-            "memory": memory.model_dump(mode="json") if memory else None,
-            "search": search.model_dump() if search else None,
-        })
+        st.json(
+            {
+                "card": card.model_dump() if card else None,
+                "vision": vision.model_dump() if vision else None,
+                "memory": memory.model_dump(mode="json") if memory else None,
+                "search": search.model_dump() if search else None,
+            }
+        )
 
 
 if __name__ == "__main__":

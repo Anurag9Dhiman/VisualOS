@@ -29,6 +29,7 @@ from src.contracts import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_image_b64(width: int = 64, height: int = 64) -> str:
     """Return a base64-encoded JPEG for tests that need real image bytes."""
     buf = io.BytesIO()
@@ -78,8 +79,10 @@ async def test_vision_agent_success(monkeypatch):
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_VISION_JSON))
 
-    with patch("src.agents.vision.genai.Client") as mock_client, \
-         patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         cost_log = []
@@ -99,12 +102,13 @@ async def test_vision_agent_guessing_sets_fallback(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
-    guessing = {**_VALID_VISION_JSON,
-                "confidence_level": "guessing", "needs_fallback": True}
+    guessing = {**_VALID_VISION_JSON, "confidence_level": "guessing", "needs_fallback": True}
     mock_resp = _mock_genai_response(json.dumps(guessing))
 
-    with patch("src.agents.vision.genai.Client") as mock_client, \
-         patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         result = await run_vision_agent(_make_image_b64(), None, None, [])
@@ -121,9 +125,11 @@ async def test_vision_agent_timeout_propagates(monkeypatch):
     async def _slow(*_, **__):
         await asyncio.sleep(10)
 
-    with patch("src.agents.vision.genai.Client") as mock_client, \
-         patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()), \
-         patch("src.agents.vision._TIMEOUT_S", 0.01):
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+        patch("src.agents.vision._TIMEOUT_S", 0.01),
+    ):
         mock_client.return_value.aio.models.generate_content = _slow
 
         with pytest.raises(asyncio.TimeoutError):
@@ -137,8 +143,10 @@ async def test_vision_agent_logs_cost(monkeypatch):
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_VISION_JSON), in_tokens=200, out_tokens=80)
 
-    with patch("src.agents.vision.genai.Client") as mock_client, \
-         patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         cost_log = []
@@ -153,6 +161,7 @@ async def test_vision_agent_logs_cost(monkeypatch):
 # Memory Agent
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
@@ -163,8 +172,10 @@ async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
     embed = [0.5] * 8
     await db.write_interaction("u1", "Eiffel Tower", "Famous iron tower.", embed)
 
-    with patch("src.agents.memory.genai.Client") as mock_client, \
-         patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.memory.genai.Client") as mock_client,
+        patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.embed_content = AsyncMock(
             return_value=_mock_embed_response(dim=8)
         )
@@ -187,7 +198,9 @@ async def test_memory_agent_filters_low_similarity(monkeypatch, tmp_db):
     from src.agents.memory import run_memory_agent
 
     # Seed with an orthogonal embedding — similarity will be ~0
-    await db.write_interaction("u1", "Red Fort", "Mughal fort.", [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    await db.write_interaction(
+        "u1", "Red Fort", "Mughal fort.", [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    )
 
     # Query with a perpendicular vector
     perp_embed = MagicMock()
@@ -195,8 +208,10 @@ async def test_memory_agent_filters_low_similarity(monkeypatch, tmp_db):
     mock_embed_resp = MagicMock()
     mock_embed_resp.embeddings = [perp_embed]
 
-    with patch("src.agents.memory.genai.Client") as mock_client, \
-         patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.memory.genai.Client") as mock_client,
+        patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.embed_content = AsyncMock(return_value=mock_embed_resp)
 
         result = await run_memory_agent("Colosseum", "u1", [])
@@ -210,8 +225,10 @@ async def test_memory_agent_empty_db(monkeypatch, tmp_db):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
     from src.agents.memory import run_memory_agent
 
-    with patch("src.agents.memory.genai.Client") as mock_client, \
-         patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.memory.genai.Client") as mock_client,
+        patch("src.agents.memory.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.embed_content = AsyncMock(
             return_value=_mock_embed_response()
         )
@@ -228,8 +245,12 @@ async def test_memory_agent_empty_db(monkeypatch, tmp_db):
 _VALID_SEARCH_JSON = {
     "research_plan": "Use Wikipedia for history, Tavily for live info.",
     "tool_calls": [
-        {"tool": "wikipedia_summary", "input": {"entity": "Eiffel Tower"},
-         "justification": "Get canonical history.", "observation": "Got founding date."}
+        {
+            "tool": "wikipedia_summary",
+            "input": {"entity": "Eiffel Tower"},
+            "justification": "Get canonical history.",
+            "observation": "Got founding date.",
+        }
     ],
     "historical_facts": [{"fact": "Built 1887–1889.", "source": "Wikipedia"}],
     "live_facts": [],
@@ -246,8 +267,10 @@ async def test_search_agent_success(monkeypatch):
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_SEARCH_JSON))
 
-    with patch("src.agents.search.genai.Client") as mock_client, \
-         patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.search.genai.Client") as mock_client,
+        patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         cost_log = []
@@ -256,7 +279,8 @@ async def test_search_agent_success(monkeypatch):
             entity_type="monument",
             vision_confidence_level="certain",
             user_interests=["architecture"],
-            lat=48.8584, lng=2.2945,
+            lat=48.8584,
+            lng=2.2945,
             cost_log=cost_log,
         )
 
@@ -276,15 +300,21 @@ async def test_search_agent_timeout_returns_fallback(monkeypatch):
     async def _slow(*_, **__):
         await asyncio.sleep(10)
 
-    with patch("src.agents.search.genai.Client") as mock_client, \
-         patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()), \
-         patch("src.agents.search._TIMEOUT_S", 0.01):
+    with (
+        patch("src.agents.search.genai.Client") as mock_client,
+        patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()),
+        patch("src.agents.search._TIMEOUT_S", 0.01),
+    ):
         mock_client.return_value.aio.models.generate_content = _slow
 
         result = await run_search_agent(
-            entity_name="X", entity_type="building",
+            entity_name="X",
+            entity_type="building",
             vision_confidence_level="certain",
-            user_interests=[], lat=None, lng=None, cost_log=[],
+            user_interests=[],
+            lat=None,
+            lng=None,
+            cost_log=[],
         )
 
     assert isinstance(result, SearchResult)
@@ -299,14 +329,20 @@ async def test_search_agent_invalid_json_returns_fallback(monkeypatch):
 
     mock_resp = _mock_genai_response("not valid json at all")
 
-    with patch("src.agents.search.genai.Client") as mock_client, \
-         patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.agents.search.genai.Client") as mock_client,
+        patch("src.agents.search.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         result = await run_search_agent(
-            entity_name="X", entity_type="building",
+            entity_name="X",
+            entity_type="building",
             vision_confidence_level="certain",
-            user_interests=[], lat=None, lng=None, cost_log=[],
+            user_interests=[],
+            lat=None,
+            lng=None,
+            cost_log=[],
         )
 
     assert "parse error" in result.research_plan.lower()
@@ -321,12 +357,14 @@ _VALID_NORMAL_CARD_JSON = {
     "card_type": "normal",
     "headline": "The Eiffel Tower is an iron lattice tower in Paris.",
     "body": "Built between 1887 and 1889, it stands 330 metres tall.",
-    "personalized_hooks": [
-        {"fact": "Designed by Gustave Eiffel.", "citation_tag": "wiki"}
-    ],
+    "personalized_hooks": [{"fact": "Designed by Gustave Eiffel.", "citation_tag": "wiki"}],
     "citations": [
-        {"id": "wiki", "source_name": "Wikipedia",
-         "url": "https://en.wikipedia.org/wiki/Eiffel_Tower", "as_of": None}
+        {
+            "id": "wiki",
+            "source_name": "Wikipedia",
+            "url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
+            "as_of": None,
+        }
     ],
     "confidence_displayed": "high",
     "source_mix": {"used_vision": True, "used_memory": False, "used_search": True},
@@ -350,8 +388,10 @@ async def test_fusion_returns_normal_card(monkeypatch):
     memory = MemoryResult(hits=[], user_id="u1")
     mock_resp = _mock_genai_response(json.dumps(_VALID_NORMAL_CARD_JSON))
 
-    with patch("src.fusion.genai.Client") as mock_client, \
-         patch("src.fusion.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.fusion.genai.Client") as mock_client,
+        patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         card = await run_fusion(vision, memory, None, [], cost_usd_total=0.0, latency_ms=500)
@@ -371,8 +411,10 @@ async def test_fusion_returns_fallback_card(monkeypatch):
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_FALLBACK_JSON))
 
-    with patch("src.fusion.genai.Client") as mock_client, \
-         patch("src.fusion.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.fusion.genai.Client") as mock_client,
+        patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         card = await run_fusion(None, None, None, [], cost_usd_total=0.001, latency_ms=800)
@@ -391,9 +433,11 @@ async def test_fusion_timeout_returns_fallback(monkeypatch):
     async def _slow(*_, **__):
         await asyncio.sleep(10)
 
-    with patch("src.fusion.genai.Client") as mock_client, \
-         patch("src.fusion.rate_limiter.acquire", new=AsyncMock()), \
-         patch("src.fusion._TIMEOUT_S", 0.01):
+    with (
+        patch("src.fusion.genai.Client") as mock_client,
+        patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
+        patch("src.fusion._TIMEOUT_S", 0.01),
+    ):
         mock_client.return_value.aio.models.generate_content = _slow
 
         card = await run_fusion(None, None, None, [], cost_usd_total=0.0, latency_ms=0)
@@ -409,8 +453,10 @@ async def test_fusion_invalid_json_returns_fallback(monkeypatch):
 
     mock_resp = _mock_genai_response("{bad json}")
 
-    with patch("src.fusion.genai.Client") as mock_client, \
-         patch("src.fusion.rate_limiter.acquire", new=AsyncMock()):
+    with (
+        patch("src.fusion.genai.Client") as mock_client,
+        patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
+    ):
         mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
 
         card = await run_fusion(None, None, None, [], cost_usd_total=0.0, latency_ms=0)
@@ -422,12 +468,17 @@ async def test_fusion_invalid_json_returns_fallback(monkeypatch):
 # _dispatch_tool — search agent tool dispatcher
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_dispatch_tool_wikipedia():
     from src.agents.search import _dispatch_tool
     from src.contracts import WikipediaResult
 
-    mock_result = WikipediaResult(title="Eiffel Tower", extract="Iron lattice tower.", url="https://en.wikipedia.org/wiki/Eiffel_Tower")
+    mock_result = WikipediaResult(
+        title="Eiffel Tower",
+        extract="Iron lattice tower.",
+        url="https://en.wikipedia.org/wiki/Eiffel_Tower",
+    )
 
     with patch("src.agents.search.wikipedia_search", new=AsyncMock(return_value=mock_result)):
         out = await _dispatch_tool("wikipedia_summary", {"entity": "Eiffel Tower"})
@@ -442,7 +493,12 @@ async def test_dispatch_tool_wikidata():
     from src.agents.search import _dispatch_tool
     from src.contracts import WikidataResult
 
-    mock_result = WikidataResult(entity_id="Q243", label="Eiffel Tower", facts={"height": "330 m"}, url="https://www.wikidata.org/wiki/Q243")
+    mock_result = WikidataResult(
+        entity_id="Q243",
+        label="Eiffel Tower",
+        facts={"height": "330 m"},
+        url="https://www.wikidata.org/wiki/Q243",
+    )
 
     with patch("src.agents.search.wikidata_lookup", new=AsyncMock(return_value=mock_result)):
         out = await _dispatch_tool("wikidata_query", {"entity": "Q243"})
@@ -456,7 +512,10 @@ async def test_dispatch_tool_tavily():
     from src.agents.search import _dispatch_tool
     from src.contracts import TavilyResult
 
-    mock_result = TavilyResult(query="Eiffel Tower hours", results=[{"title": "Hours", "url": "https://example.com", "content": "Open daily."}])
+    mock_result = TavilyResult(
+        query="Eiffel Tower hours",
+        results=[{"title": "Hours", "url": "https://example.com", "content": "Open daily."}],
+    )
 
     with patch("src.agents.search.tavily_search", new=AsyncMock(return_value=mock_result)):
         out = await _dispatch_tool("tavily_search", {"query": "Eiffel Tower hours"})
@@ -470,7 +529,12 @@ async def test_dispatch_tool_osm():
     from src.agents.search import _dispatch_tool
     from src.contracts import OSMResult
 
-    mock_result = OSMResult(name="Lalbagh Gate", address="Lalbagh Road, Bangalore", opening_hours="06:00-19:00", wheelchair=None)
+    mock_result = OSMResult(
+        name="Lalbagh Gate",
+        address="Lalbagh Road, Bangalore",
+        opening_hours="06:00-19:00",
+        wheelchair=None,
+    )
 
     with patch("src.agents.search.osm_lookup", new=AsyncMock(return_value=mock_result)):
         out = await _dispatch_tool("osm_nearby", {"lat": 12.95, "lng": 77.58, "radius_m": 50})
@@ -494,7 +558,10 @@ async def test_dispatch_tool_unknown_returns_error():
 async def test_dispatch_tool_exception_returns_error_json():
     from src.agents.search import _dispatch_tool
 
-    with patch("src.agents.search.wikipedia_search", new=AsyncMock(side_effect=RuntimeError("network down"))):
+    with patch(
+        "src.agents.search.wikipedia_search",
+        new=AsyncMock(side_effect=RuntimeError("network down")),
+    ):
         out = await _dispatch_tool("wikipedia_summary", {"entity": "anything"})
 
     data = json.loads(out)

@@ -39,8 +39,13 @@ def _preprocess_image(image_b64: str) -> bytes:
     img.save(buf, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
     processed = buf.getvalue()
 
-    logger.debug("Image preprocessed: %d KB → %d KB (%dx%d)",
-                 original_size // 1024, len(processed) // 1024, img.width, img.height)
+    logger.debug(
+        "Image preprocessed: %d KB → %d KB (%dx%d)",
+        original_size // 1024,
+        len(processed) // 1024,
+        img.width,
+        img.height,
+    )
     return processed
 
 
@@ -81,9 +86,14 @@ async def run_vision_agent(
     )
 
     usage = resp.usage_metadata
-    cost_log.append(log_cost("vision", _MODEL,
-                             (usage.prompt_token_count or 0) if usage else 0,
-                             (usage.candidates_token_count or 0) if usage else 0))
+    cost_log.append(
+        log_cost(
+            "vision",
+            _MODEL,
+            (usage.prompt_token_count or 0) if usage else 0,
+            (usage.candidates_token_count or 0) if usage else 0,
+        )
+    )
 
     data = json.loads(resp.text or "{}")
     return VisionResult(

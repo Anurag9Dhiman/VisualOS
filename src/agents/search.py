@@ -48,8 +48,9 @@ async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
                 tool_input.get("lng", 0.0),
                 tool_input.get("radius_m", 50),
             )
-            return json.dumps({"name": osm.name, "address": osm.address,
-                               "opening_hours": osm.opening_hours})
+            return json.dumps(
+                {"name": osm.name, "address": osm.address, "opening_hours": osm.opening_hours}
+            )
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
     except Exception as exc:
@@ -68,8 +69,7 @@ def _parse_search_output(data: dict) -> SearchResult:
     ][:3]
 
     historical_facts = [
-        HistoricalFact(fact=f["fact"], source=f["source"])
-        for f in data.get("historical_facts", [])
+        HistoricalFact(fact=f["fact"], source=f["source"]) for f in data.get("historical_facts", [])
     ]
     live_facts = [
         LiveFact(fact=f["fact"], source=f["source"], as_of=f.get("as_of", ""))
@@ -130,9 +130,14 @@ async def run_search_agent(
         )
 
     usage = resp.usage_metadata
-    cost_log.append(log_cost("search", _MODEL,
-                             (usage.prompt_token_count or 0) if usage else 0,
-                             (usage.candidates_token_count or 0) if usage else 0))
+    cost_log.append(
+        log_cost(
+            "search",
+            _MODEL,
+            (usage.prompt_token_count or 0) if usage else 0,
+            (usage.candidates_token_count or 0) if usage else 0,
+        )
+    )
 
     try:
         data = json.loads(resp.text or "{}")

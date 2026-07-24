@@ -38,6 +38,4 @@ def test_log_cost_returns_entry():
     assert entry.model == "gemini-2.0-flash"
     assert entry.input_tokens == 500
     assert entry.output_tokens == 200
-    assert entry.cost_usd == pytest.approx(
-        compute_cost("gemini-2.0-flash", 500, 200), rel=1e-9
-    )
+    assert entry.cost_usd == pytest.approx(compute_cost("gemini-2.0-flash", 500, 200), rel=1e-9)

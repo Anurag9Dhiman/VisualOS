@@ -22,6 +22,7 @@ from src.contracts import (
 # VisionResult
 # ---------------------------------------------------------------------------
 
+
 def _valid_vision(**overrides) -> dict:
     base = {
         "entity_name": "Lalbagh West Gate",
@@ -87,6 +88,7 @@ def test_vision_invalid_confidence():
 # SearchResult
 # ---------------------------------------------------------------------------
 
+
 def _valid_search(**overrides) -> dict:
     base = {
         "research_plan": "Use Wikipedia first, then Tavily.",
@@ -126,26 +128,34 @@ def test_search_live_facts_empty_needs_reason():
 
 
 def test_search_live_facts_present_no_reason_ok():
-    s = SearchResult(**_valid_search(
-        live_facts=[{"fact": "Open 9am-6pm", "source": "Tavily", "as_of": "2026-06"}],
-        live_facts_skipped_reason="",
-    ))
+    s = SearchResult(
+        **_valid_search(
+            live_facts=[{"fact": "Open 9am-6pm", "source": "Tavily", "as_of": "2026-06"}],
+            live_facts_skipped_reason="",
+        )
+    )
     assert len(s.live_facts) == 1
     assert "Tavily" in s.all_sources
 
 
 def test_search_all_sources_combines():
-    s = SearchResult(**_valid_search(
-        historical_facts=[{"fact": "f1", "source": "Wikipedia"}, {"fact": "f2", "source": "Wikidata"}],
-        live_facts=[{"fact": "f3", "source": "Tavily", "as_of": "now"}],
-        live_facts_skipped_reason="",
-    ))
+    s = SearchResult(
+        **_valid_search(
+            historical_facts=[
+                {"fact": "f1", "source": "Wikipedia"},
+                {"fact": "f2", "source": "Wikidata"},
+            ],
+            live_facts=[{"fact": "f3", "source": "Tavily", "as_of": "now"}],
+            live_facts_skipped_reason="",
+        )
+    )
     assert set(s.all_sources) == {"Wikipedia", "Wikidata", "Tavily"}
 
 
 # ---------------------------------------------------------------------------
 # NormalCard
 # ---------------------------------------------------------------------------
+
 
 def test_normal_card_valid():
     card = NormalCard(
@@ -189,6 +199,7 @@ def test_normal_card_exactly_3_hooks_ok():
 # FallbackCard
 # ---------------------------------------------------------------------------
 
+
 def test_fallback_card_valid():
     card = FallbackCard(
         headline="Not sure what this is.",
@@ -202,6 +213,7 @@ def test_fallback_card_valid():
 # ---------------------------------------------------------------------------
 # MemoryResult
 # ---------------------------------------------------------------------------
+
 
 def test_memory_result_empty_interests():
     m = MemoryResult(hits=[], user_id="u1")

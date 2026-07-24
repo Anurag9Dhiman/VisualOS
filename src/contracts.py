@@ -25,6 +25,7 @@ _CONFIDENCE_TO_FLOAT = {
 # Orchestrator input / state
 # ---------------------------------------------------------------------------
 
+
 class LensInput(BaseModel):
     image_path: str
     lat: float | None = None
@@ -45,6 +46,7 @@ class CostEntry(BaseModel):
 # ---------------------------------------------------------------------------
 # Vision Agent
 # ---------------------------------------------------------------------------
+
 
 class VisionResult(BaseModel):
     entity_name: str
@@ -74,6 +76,7 @@ class VisionResult(BaseModel):
 # Memory Agent
 # ---------------------------------------------------------------------------
 
+
 class MemoryHit(BaseModel):
     interaction_id: str
     subject_name: str
@@ -91,6 +94,7 @@ class MemoryResult(BaseModel):
 # ---------------------------------------------------------------------------
 # Search Agent
 # ---------------------------------------------------------------------------
+
 
 class HistoricalFact(BaseModel):
     fact: str
@@ -133,15 +137,13 @@ class SearchResult(BaseModel):
 
     @property
     def all_sources(self) -> list[str]:
-        return (
-            [f.source for f in self.historical_facts]
-            + [f.source for f in self.live_facts]
-        )
+        return [f.source for f in self.historical_facts] + [f.source for f in self.live_facts]
 
 
 # ---------------------------------------------------------------------------
 # Fusion output — union card types
 # ---------------------------------------------------------------------------
+
 
 class PersonalizedHook(BaseModel):
     fact: str
@@ -188,6 +190,7 @@ ResponseCard = NormalCard | FallbackCard
 # ---------------------------------------------------------------------------
 # Tool result types
 # ---------------------------------------------------------------------------
+
 
 class ToolError(Exception):
     def __init__(self, tool: str, message: str) -> None:

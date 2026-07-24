@@ -52,8 +52,11 @@ def _memory_dict(memory: MemoryResult | None) -> dict:
         return {"hits": [], "user_interests_snapshot": {}}
     return {
         "hits": [
-            {"subject_name": h.subject_name, "summary": h.summary,
-             "similarity_score": h.similarity_score}
+            {
+                "subject_name": h.subject_name,
+                "summary": h.summary,
+                "similarity_score": h.similarity_score,
+            }
             for h in memory.hits
         ],
         "user_interests_snapshot": memory.user_interests_snapshot,
@@ -66,7 +69,9 @@ def _search_dict(search: SearchResult | None) -> dict:
     return {
         "research_plan": search.research_plan,
         "historical_facts": [{"fact": f.fact, "source": f.source} for f in search.historical_facts],
-        "live_facts": [{"fact": f.fact, "source": f.source, "as_of": f.as_of} for f in search.live_facts],
+        "live_facts": [
+            {"fact": f.fact, "source": f.source, "as_of": f.as_of} for f in search.live_facts
+        ],
         "live_facts_skipped_reason": search.live_facts_skipped_reason,
         "identification_concerns": search.identification_concerns,
         "nearby_context": search.nearby_context,
@@ -112,9 +117,14 @@ async def run_fusion(
         )
 
     usage = resp.usage_metadata
-    cost_log.append(log_cost("fusion", _MODEL,
-                             (usage.prompt_token_count or 0) if usage else 0,
-                             (usage.candidates_token_count or 0) if usage else 0))
+    cost_log.append(
+        log_cost(
+            "fusion",
+            _MODEL,
+            (usage.prompt_token_count or 0) if usage else 0,
+            (usage.candidates_token_count or 0) if usage else 0,
+        )
+    )
 
     try:
         data = json.loads(resp.text or "{}")
@@ -142,8 +152,12 @@ async def run_fusion(
         for h in data.get("personalized_hooks", [])
     ][:3]
     citations = [
-        Citation(id=c.get("id", ""), source_name=c.get("source_name", ""),
-                 url=c.get("url", ""), as_of=c.get("as_of"))
+        Citation(
+            id=c.get("id", ""),
+            source_name=c.get("source_name", ""),
+            url=c.get("url", ""),
+            as_of=c.get("as_of"),
+        )
         for c in data.get("citations", [])
     ]
     sm = data.get("source_mix", {})
@@ -191,8 +205,12 @@ def _parse_card(raw: str, cost_usd_total: float, latency_ms: int) -> ResponseCar
         for h in data.get("personalized_hooks", [])
     ][:3]
     citations = [
-        Citation(id=c.get("id", ""), source_name=c.get("source_name", ""),
-                 url=c.get("url", ""), as_of=c.get("as_of"))
+        Citation(
+            id=c.get("id", ""),
+            source_name=c.get("source_name", ""),
+            url=c.get("url", ""),
+            as_of=c.get("as_of"),
+        )
         for c in data.get("citations", [])
     ]
     sm = data.get("source_mix", {})
@@ -247,19 +265,27 @@ async def stream_fusion(
                 final_usage = chunk.usage_metadata
     except Exception as exc:
         logger.error("stream_fusion error: %s", exc)
-        yield "", FallbackCard(
-            headline="Streaming failed.",
-            observation=str(exc),
-            suggestion="Try again.",
-            cost_usd_total=cost_usd_total,
-            latency_ms=latency_ms,
+        yield (
+            "",
+            FallbackCard(
+                headline="Streaming failed.",
+                observation=str(exc),
+                suggestion="Try again.",
+                cost_usd_total=cost_usd_total,
+                latency_ms=latency_ms,
+            ),
         )
         return
 
     if final_usage:
-        cost_log.append(log_cost("fusion_stream", _MODEL,
-                                 final_usage.prompt_token_count or 0,
-                                 final_usage.candidates_token_count or 0))
+        cost_log.append(
+            log_cost(
+                "fusion_stream",
+                _MODEL,
+                final_usage.prompt_token_count or 0,
+                final_usage.candidates_token_count or 0,
+            )
+        )
 
     card = _parse_card(accumulated, cost_usd_total, latency_ms)
     yield accumulated, card

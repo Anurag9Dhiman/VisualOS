@@ -34,6 +34,7 @@ from src.orchestrator import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_jpeg(path: Path) -> None:
     img = Image.new("RGB", (64, 64), color=(100, 150, 200))
     img.save(path, format="JPEG")
@@ -111,6 +112,7 @@ def _base_state(inp: LensInput | None = None) -> dict:
 # _should_run_agents
 # ---------------------------------------------------------------------------
 
+
 def test_should_run_agents_no_card():
     state = _base_state()
     assert _should_run_agents(state) == "vision_memory"
@@ -125,6 +127,7 @@ def test_should_run_agents_with_card_returns_done():
 # ---------------------------------------------------------------------------
 # _should_search (confidence gate)
 # ---------------------------------------------------------------------------
+
 
 def test_should_search_certain_vision():
     state = _base_state()
@@ -165,6 +168,7 @@ def test_should_search_none_vision_skips_to_fuse():
 # ---------------------------------------------------------------------------
 # plan_node
 # ---------------------------------------------------------------------------
+
 
 def test_plan_node_base64_encodes_jpeg(tmp_path):
     img_path = tmp_path / "scene.jpg"
@@ -214,6 +218,7 @@ def test_plan_node_same_image_same_key(tmp_path):
 # cache_check_node
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_cache_check_miss_leaves_card_none():
     state = _base_state()
@@ -246,6 +251,7 @@ async def test_cache_check_hit_sets_fallback_card():
 # run_pipeline — end-to-end paths (all agents mocked)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_run_pipeline_cache_hit_skips_agents(tmp_db, tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
@@ -253,10 +259,13 @@ async def test_run_pipeline_cache_hit_skips_agents(tmp_db, tmp_path, monkeypatch
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
 
-    with patch("src.cache.cache_get", new=AsyncMock(return_value=_normal_card().model_dump())), \
-         patch("src.agents.vision.run_vision_agent", new=AsyncMock()) as mock_vis, \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock()) as mock_mem:
+    with (
+        patch("src.cache.cache_get", new=AsyncMock(return_value=_normal_card().model_dump())),
+        patch("src.agents.vision.run_vision_agent", new=AsyncMock()) as mock_vis,
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock()) as mock_mem,
+    ):
         from src.orchestrator import run_pipeline
+
         state = await run_pipeline(inp)
 
     mock_vis.assert_not_called()
@@ -271,14 +280,19 @@ async def test_run_pipeline_confident_vision_calls_search(tmp_db, tmp_path, monk
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
 
-    with patch("src.cache.cache_get", new=AsyncMock(return_value=None)), \
-         patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))), \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
-         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())) as mock_search, \
-         patch("src.fusion.run_fusion", new=AsyncMock(return_value=_normal_card())), \
-         patch("src.orchestrator._write_cache_async", new=AsyncMock()), \
-         patch("src.orchestrator._write_memory_async", new=AsyncMock()):
+    with (
+        patch("src.cache.cache_get", new=AsyncMock(return_value=None)),
+        patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))),
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())),
+        patch(
+            "src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())
+        ) as mock_search,
+        patch("src.fusion.run_fusion", new=AsyncMock(return_value=_normal_card())),
+        patch("src.orchestrator._write_cache_async", new=AsyncMock()),
+        patch("src.orchestrator._write_memory_async", new=AsyncMock()),
+    ):
         from src.orchestrator import run_pipeline
+
         state = await run_pipeline(inp)
 
     mock_search.assert_called_once()
@@ -293,14 +307,22 @@ async def test_run_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monke
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
 
-    with patch("src.cache.cache_get", new=AsyncMock(return_value=None)), \
-         patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("guessing", True))), \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
-         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())) as mock_search, \
-         patch("src.fusion.run_fusion", new=AsyncMock(return_value=_fallback_card())), \
-         patch("src.orchestrator._write_cache_async", new=AsyncMock()), \
-         patch("src.orchestrator._write_memory_async", new=AsyncMock()):
+    with (
+        patch("src.cache.cache_get", new=AsyncMock(return_value=None)),
+        patch(
+            "src.agents.vision.run_vision_agent",
+            new=AsyncMock(return_value=_vision("guessing", True)),
+        ),
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())),
+        patch(
+            "src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())
+        ) as mock_search,
+        patch("src.fusion.run_fusion", new=AsyncMock(return_value=_fallback_card())),
+        patch("src.orchestrator._write_cache_async", new=AsyncMock()),
+        patch("src.orchestrator._write_memory_async", new=AsyncMock()),
+    ):
         from src.orchestrator import run_pipeline
+
         state = await run_pipeline(inp)
 
     mock_search.assert_not_called()
@@ -310,6 +332,7 @@ async def test_run_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monke
 # ---------------------------------------------------------------------------
 # _run_config
 # ---------------------------------------------------------------------------
+
 
 def test_run_config_run_name():
     inp = LensInput(image_path="/photos/test.jpg", lat=0.0, lng=0.0)
@@ -337,6 +360,7 @@ def test_run_config_has_phase0_tag():
 # stream_pipeline — primary streaming path
 # ---------------------------------------------------------------------------
 
+
 async def _fake_stream_fusion(vision, memory, search, cost_log, cost_usd, latency, locale="en-IN"):
     yield "The Eiffel", None
     yield " Tower.", None
@@ -360,11 +384,14 @@ async def test_stream_pipeline_yields_chunks_then_final_state(tmp_db, tmp_path, 
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
 
-    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))), \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
-         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())), \
-         patch("src.fusion.stream_fusion", side_effect=_fake_stream_fusion):
+    with (
+        patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))),
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())),
+        patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())),
+        patch("src.fusion.stream_fusion", side_effect=_fake_stream_fusion),
+    ):
         from src.orchestrator import stream_pipeline
+
         results = []
         async for chunk, state in stream_pipeline(inp):
             results.append((chunk, state))
@@ -390,11 +417,17 @@ async def test_stream_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, mo
     async def _fallback_stream(vision, memory, search, cost_log, cost_usd, latency, locale="en-IN"):
         yield "", _fallback_card()
 
-    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("guessing", True))), \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
-         patch("src.agents.search.run_search_agent", new=AsyncMock()) as mock_search, \
-         patch("src.fusion.stream_fusion", side_effect=_fallback_stream):
+    with (
+        patch(
+            "src.agents.vision.run_vision_agent",
+            new=AsyncMock(return_value=_vision("guessing", True)),
+        ),
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())),
+        patch("src.agents.search.run_search_agent", new=AsyncMock()) as mock_search,
+        patch("src.fusion.stream_fusion", side_effect=_fallback_stream),
+    ):
         from src.orchestrator import stream_pipeline
+
         results = []
         async for chunk, state in stream_pipeline(inp):
             results.append((chunk, state))
@@ -417,11 +450,14 @@ async def test_stream_pipeline_passes_search_result_when_confident(tmp_db, tmp_p
         captured_search["result"] = search
         yield "", _normal_card()
 
-    with patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))), \
-         patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())), \
-         patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())), \
-         patch("src.fusion.stream_fusion", side_effect=_capture_stream):
+    with (
+        patch("src.agents.vision.run_vision_agent", new=AsyncMock(return_value=_vision("certain"))),
+        patch("src.agents.memory.run_memory_agent", new=AsyncMock(return_value=_memory())),
+        patch("src.agents.search.run_search_agent", new=AsyncMock(return_value=_search())),
+        patch("src.fusion.stream_fusion", side_effect=_capture_stream),
+    ):
         from src.orchestrator import stream_pipeline
+
         async for _ in stream_pipeline(inp):
             pass
 

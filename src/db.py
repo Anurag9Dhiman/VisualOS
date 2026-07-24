@@ -95,8 +95,16 @@ async def write_interaction(
             conn.execute(
                 "INSERT INTO interactions (id, user_id, subject_name, location_slug, summary, embedding, created_at, expires_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (interaction_id, user_id, subject_name, location_slug, summary,
-                 _embed_to_blob(embedding), now.isoformat(), expires.isoformat()),
+                (
+                    interaction_id,
+                    user_id,
+                    subject_name,
+                    location_slug,
+                    summary,
+                    _embed_to_blob(embedding),
+                    now.isoformat(),
+                    expires.isoformat(),
+                ),
             )
             conn.commit()
         finally:
@@ -127,13 +135,15 @@ async def search_interactions(
         for row in rows:
             stored_embed = _blob_to_embed(row["embedding"])
             score = _cosine_similarity(query_embedding, stored_embed)
-            scored.append({
-                "interaction_id": row["id"],
-                "subject_name": row["subject_name"],
-                "summary": row["summary"],
-                "timestamp": datetime.fromisoformat(row["created_at"]),
-                "similarity_score": score,
-            })
+            scored.append(
+                {
+                    "interaction_id": row["id"],
+                    "subject_name": row["subject_name"],
+                    "summary": row["summary"],
+                    "timestamp": datetime.fromisoformat(row["created_at"]),
+                    "similarity_score": score,
+                }
+            )
 
         scored.sort(key=lambda x: x["similarity_score"], reverse=True)
         return scored[:top_k]
@@ -143,6 +153,7 @@ async def search_interactions(
 
 async def upsert_interest(user_id: str, interest: str, weight: float = 1.0) -> None:
     """Increment an interest score; decay existing score by 0.9 to favour recency."""
+
     def _upsert() -> None:
         conn = _get_conn()
         try:
@@ -166,6 +177,7 @@ async def upsert_interest(user_id: str, interest: str, weight: float = 1.0) -> N
 
 async def get_user_interests(user_id: str, top_k: int = 10) -> dict[str, float]:
     """Return top-k interests sorted by score descending."""
+
     def _get() -> dict[str, float]:
         conn = _get_conn()
         try:
@@ -182,7 +194,11 @@ async def get_user_interests(user_id: str, top_k: int = 10) -> dict[str, float]:
 
 
 async def write_cost_entry(
-    agent: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float,
+    agent: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
 ) -> None:
     def _write() -> None:
         conn = _get_conn()
@@ -190,8 +206,15 @@ async def write_cost_entry(
             conn.execute(
                 "INSERT INTO cost_log (id, agent, model, input_tokens, output_tokens, cost_usd, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), agent, model, input_tokens, output_tokens,
-                 cost_usd, datetime.utcnow().isoformat()),
+                (
+                    str(uuid.uuid4()),
+                    agent,
+                    model,
+                    input_tokens,
+                    output_tokens,
+                    cost_usd,
+                    datetime.utcnow().isoformat(),
+                ),
             )
             conn.commit()
         finally:

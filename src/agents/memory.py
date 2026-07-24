@@ -40,7 +40,9 @@ async def run_memory_agent(
     cost_log.append(log_cost("memory_embed", _EMBED_MODEL, approx_tokens, 0))
 
     rows, interests = await asyncio.gather(
-        asyncio.wait_for(db.search_interactions(user_id, query_vector, top_k=5), timeout=_TIMEOUT_S / 2),
+        asyncio.wait_for(
+            db.search_interactions(user_id, query_vector, top_k=5), timeout=_TIMEOUT_S / 2
+        ),
         asyncio.wait_for(get_user_interests(user_id), timeout=_TIMEOUT_S / 2),
     )
 
@@ -55,5 +57,7 @@ async def run_memory_agent(
         for r in rows
         if r["similarity_score"] > 0.75
     ]
-    logger.debug("Memory agent: %d hits, %d interests for user %s", len(hits), len(interests), user_id)
+    logger.debug(
+        "Memory agent: %d hits, %d interests for user %s", len(hits), len(interests), user_id
+    )
     return MemoryResult(hits=hits, user_id=user_id, user_interests_snapshot=interests)
