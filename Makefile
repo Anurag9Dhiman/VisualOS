@@ -1,4 +1,4 @@
-.PHONY: setup test cov lint format typecheck run inspect clean
+.PHONY: setup test cov lint format typecheck integration run inspect clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -13,6 +13,16 @@ test:
 
 cov:
 	pytest --cov=src --cov-report=term-missing -q
+
+# Usage: make integration IMAGE=path/to/photo.jpg [LAT=12.95] [LNG=77.58]
+integration:
+ifndef IMAGE
+	$(error IMAGE is required — e.g. make integration IMAGE=photo.jpg LAT=12.95 LNG=77.58)
+endif
+	TEST_IMAGE_PATH=$(IMAGE) \
+		$(if $(LAT),TEST_LAT=$(LAT)) \
+		$(if $(LNG),TEST_LNG=$(LNG)) \
+		pytest -m integration -v -s
 
 lint:
 	ruff format --check src/ tests/
