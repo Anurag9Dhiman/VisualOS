@@ -89,15 +89,28 @@ Upload an image, set coordinates, and run the pipeline. Results shown across fiv
 
 ## Tests
 
-All tests run offline — no API keys needed.
+### Offline unit tests (no API keys needed)
 
 ```bash
-pytest                   # run all tests
-pytest -v                # verbose output
+pytest                   # run all 133 tests (skips integration tests automatically)
+make cov                 # tests + coverage report (≥90% gate)
 pytest tests/test_agents.py  # specific file
 ```
 
-Current coverage: **43+ tests** across contracts, cost logger, DB, rate limiter, agents, tools, cache, and fusion.
+### Integration tests (require `GOOGLE_API_KEY`)
+
+End-to-end tests that call the real Gemini APIs — vision, search, and fusion. Skipped automatically when env vars are not set.
+
+```bash
+# Quickest way
+make integration IMAGE=path/to/photo.jpg LAT=12.95 LNG=77.58
+
+# Or directly
+GOOGLE_API_KEY=... TEST_IMAGE_PATH=photo.jpg TEST_LAT=12.95 TEST_LNG=77.58 \
+  pytest -m integration -v -s
+```
+
+Three tests run: `run_pipeline` returns a card, `stream_pipeline` yields tokens, and a second scan of the same image is served from cache.
 
 ---
 
