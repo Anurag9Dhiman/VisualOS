@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import struct
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -64,7 +64,7 @@ async def test_expired_interactions_excluded(tmp_db, monkeypatch):
     import sqlite3
 
     conn = sqlite3.connect(tmp_db)
-    past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     embed_blob = struct.pack("8f", *_make_embedding())
     conn.execute(
         "INSERT INTO interactions (id, user_id, subject_name, location_slug, summary, embedding, created_at, expires_at) "
