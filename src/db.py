@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import struct
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger("lens.db")
@@ -88,7 +88,7 @@ async def write_interaction(
 ) -> str:
     def _write() -> str:
         interaction_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires = now + timedelta(days=MEMORY_TTL_DAYS)
         conn = _get_conn()
         try:
@@ -111,7 +111,7 @@ async def write_interaction(
             conn.close()
         return interaction_id
 
-    return await asyncio.get_event_loop().run_in_executor(None, _write)
+    return await asyncio.get_running_loop().run_in_executor(None, _write)
 
 
 async def search_interactions(
@@ -122,7 +122,7 @@ async def search_interactions(
     def _search() -> list[dict]:
         conn = _get_conn()
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(UTC).isoformat()
             rows = conn.execute(
                 "SELECT id, subject_name, summary, created_at, embedding FROM interactions "
                 "WHERE user_id = ? AND expires_at > ?",
@@ -148,7 +148,7 @@ async def search_interactions(
         scored.sort(key=lambda x: x["similarity_score"], reverse=True)
         return scored[:top_k]
 
-    return await asyncio.get_event_loop().run_in_executor(None, _search)
+    return await asyncio.get_running_loop().run_in_executor(None, _search)
 
 
 async def upsert_interest(user_id: str, interest: str, weight: float = 1.0) -> None:
@@ -166,13 +166,13 @@ async def upsert_interest(user_id: str, interest: str, weight: float = 1.0) -> N
                 "INSERT INTO user_interests (user_id, interest, score, updated_at) "
                 "VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(user_id, interest) DO UPDATE SET score = excluded.score, updated_at = excluded.updated_at",
-                (user_id, interest, new_score, datetime.utcnow().isoformat()),
+                (user_id, interest, new_score, datetime.now(UTC).isoformat()),
             )
             conn.commit()
         finally:
             conn.close()
 
-    await asyncio.get_event_loop().run_in_executor(None, _upsert)
+    await asyncio.get_running_loop().run_in_executor(None, _upsert)
 
 
 async def get_user_interests(user_id: str, top_k: int = 10) -> dict[str, float]:
@@ -190,7 +190,7 @@ async def get_user_interests(user_id: str, top_k: int = 10) -> dict[str, float]:
         finally:
             conn.close()
 
-    return await asyncio.get_event_loop().run_in_executor(None, _get)
+    return await asyncio.get_running_loop().run_in_executor(None, _get)
 
 
 async def write_cost_entry(
@@ -213,11 +213,11 @@ async def write_cost_entry(
                     input_tokens,
                     output_tokens,
                     cost_usd,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(UTC).isoformat(),
                 ),
             )
             conn.commit()
         finally:
             conn.close()
 
-    await asyncio.get_event_loop().run_in_executor(None, _write)
+    await asyncio.get_running_loop().run_in_executor(None, _write)

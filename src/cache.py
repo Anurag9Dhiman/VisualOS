@@ -11,7 +11,7 @@ import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger("lens.cache")
@@ -57,7 +57,7 @@ async def cache_get(cache_key: str) -> dict | None:
         conn = sqlite3.connect(_DB_PATH)
         conn.row_factory = sqlite3.Row
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(UTC).isoformat()
             row = conn.execute(
                 "SELECT card_json FROM response_cache WHERE cache_key = ? AND expires_at > ?",
                 (cache_key, now),
@@ -66,7 +66,7 @@ async def cache_get(cache_key: str) -> dict | None:
         finally:
             conn.close()
 
-    result = await asyncio.get_event_loop().run_in_executor(None, _get)
+    result = await asyncio.get_running_loop().run_in_executor(None, _get)
     if result:
         logger.info("Cache HIT for key %s…", cache_key[:12])
     else:
@@ -80,7 +80,7 @@ async def cache_set(cache_key: str, card_dict: dict) -> None:
     def _set() -> None:
         if _DB_PATH is None:
             raise RuntimeError("cache not initialised — call init_cache() first")
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires = now + timedelta(hours=_TTL_HOURS)
         conn = sqlite3.connect(_DB_PATH)
         try:
@@ -93,5 +93,5 @@ async def cache_set(cache_key: str, card_dict: dict) -> None:
         finally:
             conn.close()
 
-    await asyncio.get_event_loop().run_in_executor(None, _set)
+    await asyncio.get_running_loop().run_in_executor(None, _set)
     logger.debug("Cache SET for key %s… (TTL %dh)", cache_key[:12], _TTL_HOURS)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.contracts import CostEntry
 
@@ -32,7 +32,7 @@ def log_cost(agent: str, model: str, input_tokens: int, output_tokens: int) -> C
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
     )
     logger.info(
         json.dumps(
