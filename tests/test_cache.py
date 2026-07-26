@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -132,7 +132,7 @@ async def test_cache_stores_full_card_structure(cache):
 @pytest.mark.asyncio
 async def test_cache_get_returns_none_for_expired_entry(cache, tmp_db: Path):
     key = "expired-key"
-    past = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
     conn = sqlite3.connect(tmp_db)
     conn.execute(
