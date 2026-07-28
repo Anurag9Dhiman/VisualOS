@@ -51,7 +51,6 @@ jobs:
   typecheck:
     name: Type check
     runs-on: ubuntu-latest
-    continue-on-error: true  # informational only — SDK stubs have known gaps
 
     steps:
       - uses: actions/checkout@v4
@@ -66,4 +65,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run mypy
-        run: mypy src/ --ignore-missing-imports --no-error-summary
+        run: mypy src/

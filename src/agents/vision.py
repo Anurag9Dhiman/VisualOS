@@ -66,7 +66,7 @@ async def run_vision_agent(
     )
 
     img_bytes = _preprocess_image(image_b64)
-    contents: list = [  # type: ignore[type-arg]
+    contents: list = [
         types.Part.from_text(text=prompt),
         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
     ]
@@ -75,7 +75,7 @@ async def run_vision_agent(
     resp = await asyncio.wait_for(
         client.aio.models.generate_content(
             model=_MODEL,
-            contents=contents,  # type: ignore[arg-type]
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=VISION_SYSTEM_PROMPT,
                 response_mime_type="application/json",
