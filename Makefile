@@ -33,7 +33,7 @@ format:
 	ruff check src/ tests/ --fix
 
 typecheck:
-	mypy src/ --ignore-missing-imports
+	mypy src/
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 # Usage: make run IMAGE=path/to/photo.jpg LAT=12.95 LNG=77.58
