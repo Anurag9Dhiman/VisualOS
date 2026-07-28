@@ -1,4 +1,4 @@
-.PHONY: setup test cov lint format typecheck integration run inspect clean
+.PHONY: setup test cov lint format typecheck security integration run inspect clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -34,6 +34,9 @@ format:
 
 typecheck:
 	mypy src/ --ignore-missing-imports
+
+security:
+	pip-audit --requirement requirements.txt
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 # Usage: make run IMAGE=path/to/photo.jpg LAT=12.95 LNG=77.58
