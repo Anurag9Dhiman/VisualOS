@@ -28,7 +28,7 @@ mypy>=1.11.0
 
 # Linting / formatting
 ruff==0.15.22
-pre-commit>=3.8.0
+pre-commit>=4.6.1
 
 # Security
 pip-audit>=2.7.0
