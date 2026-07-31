@@ -1,4 +1,4 @@
-.PHONY: setup test cov lint format typecheck security integration run inspect clean
+.PHONY: setup test cov lint format typecheck security integration run inspect serve clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -51,6 +51,9 @@ endif
 
 inspect:
 	streamlit run src/inspector.py
+
+serve:
+	uvicorn src.server:app --reload --host 0.0.0.0 --port 8000
 
 # ── Clean ────────────────────────────────────────────────────────────────────
 clean:
