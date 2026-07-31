@@ -1,4 +1,4 @@
-.PHONY: setup test cov lint format typecheck security integration run inspect serve clean
+.PHONY: setup test cov lint format typecheck security integration run inspect serve docker-build docker-up docker-down clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -54,6 +54,16 @@ inspect:
 
 serve:
 	uvicorn src.server:app --reload --host 0.0.0.0 --port 8000
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+docker-build:
+	docker build -t lens-os-api .
+
+docker-up:
+	docker compose up --build -d
+
+docker-down:
+	docker compose down
 
 # ── Clean ────────────────────────────────────────────────────────────────────
 clean:
