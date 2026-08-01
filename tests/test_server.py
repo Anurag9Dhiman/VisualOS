@@ -4,6 +4,8 @@ All pipeline calls are mocked. Tests cover:
   - GET /health
   - POST /analyze: happy path, bad MIME, missing image, timeout, no-card fallback
   - POST /analyze/stream: token events, final card event, timeout error event
+  - Auth: correct key accepted, wrong key/no key → 401, health bypasses auth,
+          dev-mode (LENS_API_KEY unset) allows all requests
 """
 
 from __future__ import annotations
@@ -207,3 +209,74 @@ async def test_stream_timeout_yields_error_event(client: AsyncClient):
 
     events = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
     assert any(e["type"] == "error" for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Auth — X-API-Key header
+# ---------------------------------------------------------------------------
+
+_VALID_KEY = "lens-test-secret-key"
+
+
+async def test_auth_correct_key_accepted(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_API_KEY", _VALID_KEY)
+    mock_state = {"response_card": _normal_card(), "errors": []}
+    with patch("src.server.run_pipeline", new_callable=AsyncMock, return_value=mock_state):
+        async with client as c:
+            r = await c.post(
+                "/analyze",
+                files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+                headers={"X-API-Key": _VALID_KEY},
+            )
+    assert r.status_code == 200
+
+
+async def test_auth_wrong_key_returns_401(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_API_KEY", _VALID_KEY)
+    async with client as c:
+        r = await c.post(
+            "/analyze",
+            files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            headers={"X-API-Key": "wrong-key"},
+        )
+    assert r.status_code == 401
+    assert "API key" in r.json()["detail"]
+
+
+async def test_auth_missing_key_returns_401(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_API_KEY", _VALID_KEY)
+    async with client as c:
+        r = await c.post(
+            "/analyze",
+            files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+        )
+    assert r.status_code == 401
+
+
+async def test_auth_health_is_public(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_API_KEY", _VALID_KEY)
+    async with client as c:
+        r = await c.get("/health")
+    assert r.status_code == 200
+
+
+async def test_auth_dev_mode_allows_requests(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("LENS_API_KEY", raising=False)
+    mock_state = {"response_card": _normal_card(), "errors": []}
+    with patch("src.server.run_pipeline", new_callable=AsyncMock, return_value=mock_state):
+        async with client as c:
+            r = await c.post(
+                "/analyze",
+                files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            )
+    assert r.status_code == 200
+
+
+async def test_auth_stream_requires_key(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_API_KEY", _VALID_KEY)
+    async with client as c:
+        r = await c.post(
+            "/analyze/stream",
+            files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+        )
+    assert r.status_code == 401
