@@ -9,19 +9,41 @@ Endpoints:
 
 from __future__ import annotations
 
+import hmac
 import json
+import logging
+import os
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile
 from fastapi.responses import StreamingResponse
+from fastapi.security import APIKeyHeader
 
 from src.contracts import LensInput
 from src.orchestrator import run_pipeline, stream_pipeline
 
+logger = logging.getLogger("lens.server")
+
 app = FastAPI(title="Lens OS API", version="0.1.0")
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def _require_api_key(key: str | None = Security(_api_key_header)) -> None:
+    """Validate X-API-Key header against LENS_API_KEY env var.
+
+    If LENS_API_KEY is unset the server runs in dev mode — all requests are
+    allowed, but a warning is logged on every call as a reminder to set the
+    key before deploying.
+    """
+    configured = os.getenv("LENS_API_KEY")
+    if configured is None:
+        logger.warning("LENS_API_KEY not set — running without auth (dev mode only)")
+        return
+    if key is None or not hmac.compare_digest(key, configured):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 @app.get("/health")
@@ -29,7 +51,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "version": "0.1.0"}
 
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Security(_require_api_key)])
 async def analyze(
     image: UploadFile = File(..., description="JPEG, PNG, or WebP photo"),
     lat: float | None = Form(None, description="GPS latitude"),
@@ -62,7 +84,7 @@ async def analyze(
     return card.model_dump()
 
 
-@app.post("/analyze/stream")
+@app.post("/analyze/stream", dependencies=[Security(_require_api_key)])
 async def analyze_stream(
     image: UploadFile = File(..., description="JPEG, PNG, or WebP photo"),
     lat: float | None = Form(None),
