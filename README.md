@@ -85,6 +85,53 @@ streamlit run src/inspector.py
 
 Upload an image, set coordinates, and run the pipeline. Results shown across five tabs: Vision, Memory, Search, Cost, Raw JSON.
 
+### API server
+
+```bash
+make serve          # uvicorn --reload on http://localhost:8000
+make docker-up      # production container on http://localhost:8000
+```
+
+Endpoints:
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | none | Liveness check |
+| `POST` | `/analyze` | `X-API-Key` | Returns `ResponseCard` JSON |
+| `POST` | `/analyze/stream` | `X-API-Key` | SSE stream of tokens then final card |
+
+Interactive docs at `http://localhost:8000/docs` (Swagger UI).
+
+---
+
+## Deployment (Fly.io)
+
+The server ships as a Docker image. Fly.io hosts it with zero config beyond secrets.
+
+**One-time setup**
+
+```bash
+brew install flyctl          # or https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+fly launch --no-deploy       # reads fly.toml — creates the app, does not deploy yet
+```
+
+**Set secrets** (never put these in fly.toml)
+
+```bash
+fly secrets set GOOGLE_API_KEY="AIza..."
+fly secrets set TAVILY_API_KEY="tvly-..."      # optional
+fly secrets set LENS_API_KEY="lens-..."        # generate: python3 -c "import secrets; print('lens-' + secrets.token_urlsafe(32))"
+```
+
+**Deploy**
+
+```bash
+make fly-deploy              # fly deploy
+```
+
+Fly tails logs with `fly logs`. The `/health` endpoint is polled every 30 s as a liveness check.
+
 ---
 
 ## Tests

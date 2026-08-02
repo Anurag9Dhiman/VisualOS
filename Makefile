@@ -1,4 +1,4 @@
-.PHONY: setup test cov lint format typecheck security integration run inspect serve docker-build docker-up docker-down clean
+.PHONY: setup test cov lint format typecheck security integration run inspect serve docker-build docker-up docker-down fly-deploy clean
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 setup:
@@ -64,6 +64,9 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+fly-deploy:
+	fly deploy
 
 # ── Clean ────────────────────────────────────────────────────────────────────
 clean:
