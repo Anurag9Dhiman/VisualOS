@@ -15,6 +15,11 @@ enum ScanState {
         default: return false
         }
     }
+
+    var isIdle: Bool {
+        if case .idle = self { return true }
+        return false
+    }
 }
 
 @MainActor
