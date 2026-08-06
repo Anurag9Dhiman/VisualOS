@@ -46,7 +46,9 @@ final class ScanViewModel: ObservableObject {
             for try await event in client.analyzeStream(
                 imageData: imageData,
                 lat: location?.coordinate.latitude,
-                lng: location?.coordinate.longitude
+                lng: location?.coordinate.longitude,
+                userID: UserSession.userID,
+                userLocale: UserSession.locale
             ) {
                 switch event {
                 case .token(let chunk):

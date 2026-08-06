@@ -34,10 +34,12 @@ Drop these files into a new Xcode project and the full scan → stream → card 
 
 ```
 Sources/
-  LensApp.swift             @main entry point
+  LensApp.swift             @main entry point — shows OnboardingView on first launch
+  UserSession.swift         Stable device UUID + onboarding flag (UserDefaults)
   ContentView.swift         Full-screen camera → scan → streaming → result sheet
   ScanViewModel.swift       ObservableObject driving the state machine
   Views/
+    OnboardingView.swift    Welcome + permissions screens (shown once)
     CameraView.swift        AVCaptureSession viewfinder + shutter button
     CardView.swift          NormalCardView + FallbackCardView + previews
 ```
