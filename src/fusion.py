@@ -78,6 +78,20 @@ def _search_dict(search: SearchResult | None) -> dict:
     }
 
 
+def _fusion_correction_message(bad_text: str, error: Exception) -> str:
+    """Build a targeted correction prompt for Fusion's bad output."""
+    if isinstance(error, json.JSONDecodeError):
+        return (
+            "Your last output was not valid JSON. "
+            f"Parse error: {error}. "
+            "Return ONLY the JSON object — no markdown, no prose, no code fences."
+        )
+    return (
+        f"Your last output failed to parse: {error}. "
+        "Return the complete normal card or fallback card JSON matching the schema exactly."
+    )
+
+
 async def run_fusion(
     vision: VisionResult | None,
     memory: MemoryResult | None,
@@ -92,87 +106,122 @@ async def run_fusion(
         _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
     )
 
-    await rate_limiter.acquire(_MODEL)
-    try:
-        resp = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model=_MODEL,
-                contents=user_msg,
-                config=types.GenerateContentConfig(
-                    system_instruction=FUSION_SYSTEM_PROMPT,
-                    response_mime_type="application/json",
-                    max_output_tokens=1200,
+    # Base user turn — reused across attempts.
+    base_turn = types.Content(role="user", parts=[types.Part.from_text(text=user_msg)])
+
+    bad_text = ""
+    last_parse_error: Exception | None = None
+
+    for attempt in range(2):
+        if attempt == 0:
+            contents: list[types.Content] = [base_turn]
+        else:
+            cost_log.append(log_cost("fusion_retry", _MODEL, 0, 0))
+            logger.info("Fusion retry (attempt 2): %s", last_parse_error)
+            contents = [
+                base_turn,
+                types.Content(role="model", parts=[types.Part.from_text(text=bad_text)]),
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text=_fusion_correction_message(bad_text, last_parse_error)  # type: ignore[arg-type]
+                        )
+                    ],
                 ),
-            ),
-            timeout=_TIMEOUT_S,
-        )
-    except TimeoutError:
-        logger.warning("Fusion timed out, returning fallback")
-        return FallbackCard(
-            headline="Could not compose a response in time.",
-            observation="The pipeline exceeded its time budget.",
-            suggestion="Try again — this is usually a transient issue.",
-            cost_usd_total=cost_usd_total,
-            latency_ms=latency_ms,
+            ]
+
+        await rate_limiter.acquire(_MODEL)
+        try:
+            resp = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=_MODEL,
+                    contents=contents,  # type: ignore[arg-type]
+                    config=types.GenerateContentConfig(
+                        system_instruction=FUSION_SYSTEM_PROMPT,
+                        response_mime_type="application/json",
+                        max_output_tokens=1200,
+                    ),
+                ),
+                timeout=_TIMEOUT_S,
+            )
+        except TimeoutError:
+            logger.warning("Fusion timed out (attempt %d)", attempt + 1)
+            return FallbackCard(
+                headline="Could not compose a response in time.",
+                observation="The pipeline exceeded its time budget.",
+                suggestion="Try again — this is usually a transient issue.",
+                cost_usd_total=cost_usd_total,
+                latency_ms=latency_ms,
+            )
+
+        usage = resp.usage_metadata
+        cost_log.append(
+            log_cost(
+                "fusion",
+                _MODEL,
+                (usage.prompt_token_count or 0) if usage else 0,
+                (usage.candidates_token_count or 0) if usage else 0,
+            )
         )
 
-    usage = resp.usage_metadata
-    cost_log.append(
-        log_cost(
-            "fusion",
-            _MODEL,
-            (usage.prompt_token_count or 0) if usage else 0,
-            (usage.candidates_token_count or 0) if usage else 0,
-        )
-    )
+        bad_text = resp.text or ""
 
-    try:
-        data = json.loads(resp.text or "{}")
-    except json.JSONDecodeError:
-        logger.error("Fusion returned invalid JSON")
-        return FallbackCard(
-            headline="Could not parse response.",
-            observation="Internal error in the fusion step.",
-            suggestion="Try again.",
-            cost_usd_total=cost_usd_total,
-            latency_ms=latency_ms,
-        )
+        try:
+            data = json.loads(bad_text)
+        except json.JSONDecodeError as exc:
+            last_parse_error = exc
+            continue  # retry
 
-    if data.get("card_type") == "fallback":
-        return FallbackCard(
-            headline=data.get("headline", "Not sure what this is."),
-            observation=data.get("observation", ""),
-            suggestion=data.get("suggestion", "Try a clearer angle."),
-            cost_usd_total=cost_usd_total,
-            latency_ms=latency_ms,
-        )
+        # Intentional fallback card — not an error, don't retry.
+        if data.get("card_type") == "fallback":
+            return FallbackCard(
+                headline=data.get("headline", "Not sure what this is."),
+                observation=data.get("observation", ""),
+                suggestion=data.get("suggestion", "Try a clearer angle."),
+                cost_usd_total=cost_usd_total,
+                latency_ms=latency_ms,
+            )
 
-    hooks = [
-        PersonalizedHook(fact=h["fact"], citation_tag=h.get("citation_tag", ""))
-        for h in data.get("personalized_hooks", [])
-    ][:3]
-    citations = [
-        Citation(
-            id=c.get("id", ""),
-            source_name=c.get("source_name", ""),
-            url=c.get("url", ""),
-            as_of=c.get("as_of"),
-        )
-        for c in data.get("citations", [])
-    ]
-    sm = data.get("source_mix", {})
+        try:
+            hooks = [
+                PersonalizedHook(fact=h["fact"], citation_tag=h.get("citation_tag", ""))
+                for h in data.get("personalized_hooks", [])
+            ][:3]
+            citations = [
+                Citation(
+                    id=c.get("id", ""),
+                    source_name=c.get("source_name", ""),
+                    url=c.get("url", ""),
+                    as_of=c.get("as_of"),
+                )
+                for c in data.get("citations", [])
+            ]
+            sm = data.get("source_mix", {})
+            return NormalCard(
+                headline=data.get("headline", ""),
+                body=data.get("body", ""),
+                personalized_hooks=hooks,
+                citations=citations,
+                confidence_displayed=data.get("confidence_displayed", "high"),
+                source_mix=SourceMix(
+                    used_vision=sm.get("used_vision", True),
+                    used_memory=sm.get("used_memory", False),
+                    used_search=sm.get("used_search", True),
+                ),
+                cost_usd_total=cost_usd_total,
+                latency_ms=latency_ms,
+            )
+        except (KeyError, Exception) as exc:
+            last_parse_error = exc
+            continue  # retry
 
-    return NormalCard(
-        headline=data.get("headline", ""),
-        body=data.get("body", ""),
-        personalized_hooks=hooks,
-        citations=citations,
-        confidence_displayed=data.get("confidence_displayed", "high"),
-        source_mix=SourceMix(
-            used_vision=sm.get("used_vision", True),
-            used_memory=sm.get("used_memory", False),
-            used_search=sm.get("used_search", True),
-        ),
+    # Both attempts failed — return a graceful fallback.
+    logger.error("Fusion failed after 2 attempts: %s", last_parse_error)
+    return FallbackCard(
+        headline="Could not parse response.",
+        observation="Internal error in the fusion step.",
+        suggestion="Try again.",
         cost_usd_total=cost_usd_total,
         latency_ms=latency_ms,
     )
