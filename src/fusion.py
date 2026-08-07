@@ -134,7 +134,7 @@ async def run_fusion(
             resp = await asyncio.wait_for(
                 client.aio.models.generate_content(
                     model=_MODEL,
-                    contents=contents,
+                    contents=contents,  # type: ignore[arg-type]
                     config=types.GenerateContentConfig(
                         system_instruction=FUSION_SYSTEM_PROMPT,
                         response_mime_type="application/json",

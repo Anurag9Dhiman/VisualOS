@@ -136,7 +136,7 @@ async def run_vision_agent(
         resp = await asyncio.wait_for(
             client.aio.models.generate_content(
                 model=_MODEL,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]
                 config=types.GenerateContentConfig(
                     system_instruction=VISION_SYSTEM_PROMPT,
                     response_mime_type="application/json",
