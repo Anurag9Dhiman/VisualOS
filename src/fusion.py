@@ -123,9 +123,11 @@ async def run_fusion(
                 types.Content(role="model", parts=[types.Part.from_text(text=bad_text)]),
                 types.Content(
                     role="user",
-                    parts=[types.Part.from_text(
-                        text=_fusion_correction_message(bad_text, last_parse_error)  # type: ignore[arg-type]
-                    )],
+                    parts=[
+                        types.Part.from_text(
+                            text=_fusion_correction_message(bad_text, last_parse_error)  # type: ignore[arg-type]
+                        )
+                    ],
                 ),
             ]
 

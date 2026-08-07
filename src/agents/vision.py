@@ -81,8 +81,7 @@ def _correction_message(bad_text: str, error: Exception) -> str:
         )
     # ValidationError (e.g. guessing without needs_fallback=True)
     return (
-        f"Your last output failed schema validation: {error}. "
-        "Fix the issue and return valid JSON."
+        f"Your last output failed schema validation: {error}. Fix the issue and return valid JSON."
     )
 
 
