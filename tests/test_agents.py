@@ -157,6 +157,54 @@ async def test_vision_agent_logs_cost(monkeypatch):
     assert cost_log[0].cost_usd > 0
 
 
+@pytest.mark.asyncio
+async def test_vision_agent_retries_on_bad_json(monkeypatch):
+    """First response is invalid JSON; second response is valid — result should succeed."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    from src.agents.vision import run_vision_agent
+
+    bad_resp = _mock_genai_response("not json at all")
+    good_resp = _mock_genai_response(json.dumps(_VALID_VISION_JSON))
+
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        mock_client.return_value.aio.models.generate_content = AsyncMock(
+            side_effect=[bad_resp, good_resp]
+        )
+
+        cost_log = []
+        result = await run_vision_agent(_make_image_b64(), 48.8584, 2.2945, cost_log)
+
+    assert isinstance(result, VisionResult)
+    assert result.entity_name == "Eiffel Tower"
+    # cost_log: vision_retry marker + two vision entries
+    agents = [e.agent for e in cost_log]
+    assert "vision_retry" in agents
+    assert agents.count("vision") == 2
+
+
+@pytest.mark.asyncio
+async def test_vision_agent_raises_after_two_failures(monkeypatch):
+    """Both attempts return invalid JSON — agent raises ValueError."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    from src.agents.vision import run_vision_agent
+
+    bad_resp = _mock_genai_response("{bad json")
+
+    with (
+        patch("src.agents.vision.genai.Client") as mock_client,
+        patch("src.agents.vision.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        mock_client.return_value.aio.models.generate_content = AsyncMock(
+            side_effect=[bad_resp, bad_resp]
+        )
+
+        with pytest.raises(ValueError, match="2 attempts"):
+            await run_vision_agent(_make_image_b64(), None, None, [])
+
+
 # ---------------------------------------------------------------------------
 # Memory Agent
 # ---------------------------------------------------------------------------
@@ -448,20 +496,51 @@ async def test_fusion_timeout_returns_fallback(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fusion_invalid_json_returns_fallback(monkeypatch):
+    """Both attempts return bad JSON — should exhaust retries and return FallbackCard."""
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
     from src.fusion import run_fusion
 
-    mock_resp = _mock_genai_response("{bad json}")
+    bad_resp = _mock_genai_response("{bad json}")
 
     with (
         patch("src.fusion.genai.Client") as mock_client,
         patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
     ):
-        mock_client.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        # Two calls — attempt 1 + retry attempt 2
+        mock_client.return_value.aio.models.generate_content = AsyncMock(
+            side_effect=[bad_resp, bad_resp]
+        )
 
         card = await run_fusion(None, None, None, [], cost_usd_total=0.0, latency_ms=0)
 
     assert isinstance(card, FallbackCard)
+
+
+@pytest.mark.asyncio
+async def test_fusion_retries_on_bad_json(monkeypatch):
+    """First response is invalid JSON; second response is a valid normal card."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    from src.fusion import run_fusion
+
+    bad_resp = _mock_genai_response("not json")
+    good_resp = _mock_genai_response(json.dumps(_VALID_NORMAL_CARD_JSON))
+
+    with (
+        patch("src.fusion.genai.Client") as mock_client,
+        patch("src.fusion.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        mock_client.return_value.aio.models.generate_content = AsyncMock(
+            side_effect=[bad_resp, good_resp]
+        )
+
+        cost_log: list = []
+        card = await run_fusion(None, None, None, cost_log, cost_usd_total=0.0, latency_ms=0)
+
+    assert isinstance(card, NormalCard)
+    assert card.headline == _VALID_NORMAL_CARD_JSON["headline"]
+    agents = [e.agent for e in cost_log]
+    assert "fusion_retry" in agents
+    assert agents.count("fusion") == 2
 
 
 # ---------------------------------------------------------------------------
