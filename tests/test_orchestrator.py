@@ -25,7 +25,6 @@ from src.contracts import (
 from src.orchestrator import (
     _run_config,
     _should_run_agents,
-    _should_search,
     cache_check_node,
     plan_node,
 )
@@ -105,6 +104,7 @@ def _base_state(inp: LensInput | None = None) -> dict:
         "errors": [],
         "_start_time": 0.0,
         "_cache_key": "abc123def456" * 4,  # 48-char placeholder
+        "search_route": "default",
     }
 
 
@@ -122,47 +122,6 @@ def test_should_run_agents_with_card_returns_done():
     state = _base_state()
     state["response_card"] = _normal_card()
     assert _should_run_agents(state) == "done"
-
-
-# ---------------------------------------------------------------------------
-# _should_search (confidence gate)
-# ---------------------------------------------------------------------------
-
-
-def test_should_search_certain_vision():
-    state = _base_state()
-    state["vision_result"] = _vision("certain")
-    assert _should_search(state) == "search"
-
-
-def test_should_search_fairly_sure_vision():
-    state = _base_state()
-    state["vision_result"] = _vision("fairly_sure")
-    assert _should_search(state) == "search"
-
-
-def test_should_search_uncertain_vision():
-    state = _base_state()
-    state["vision_result"] = _vision("uncertain")
-    assert _should_search(state) == "search"
-
-
-def test_should_search_guessing_skips_to_fuse():
-    state = _base_state()
-    state["vision_result"] = _vision("guessing", needs_fallback=True)
-    assert _should_search(state) == "fuse"
-
-
-def test_should_search_needs_fallback_skips_to_fuse():
-    state = _base_state()
-    state["vision_result"] = _vision("uncertain", needs_fallback=True)
-    assert _should_search(state) == "fuse"
-
-
-def test_should_search_none_vision_skips_to_fuse():
-    state = _base_state()
-    state["vision_result"] = None
-    assert _should_search(state) == "fuse"
 
 
 # ---------------------------------------------------------------------------

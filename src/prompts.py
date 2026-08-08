@@ -290,15 +290,18 @@ def build_search_user_message(
     vision_confidence_level: str,
     location: GeoPoint,
     user_interests: list[str],
+    tool_priority: list[str] | None = None,
 ) -> str:
     """Build the per-request user message for the Search Agent."""
+    priority_line = f"tool_priority: {tool_priority}\n" if tool_priority else ""
     return (
         f"entity_name: {entity_name!r}\n"
         f"entity_type: {entity_type!r}\n"
         f"vision_confidence_level: {vision_confidence_level!r}\n"
         f"location: ({location.lat}, {location.lng})\n"
-        f"user_interests: {user_interests}\n\n"
-        "Apply the reasoning protocol and return JSON."
+        f"user_interests: {user_interests}\n"
+        f"{priority_line}"
+        "\nApply the reasoning protocol and return JSON."
     )
 
 
