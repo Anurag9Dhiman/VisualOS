@@ -28,6 +28,22 @@ logger = logging.getLogger("lens.orchestrator")
 
 _OVERALL_TIMEOUT_S = 2.5
 
+# Maps entity_type → which search tools to prioritise first.
+_ENTITY_ROUTE: dict[str, str] = {
+    "building": "osm_first",
+    "monument": "wikidata_first",
+    "statue": "wikidata_first",
+    "object": "skip",
+    "unknown": "default",
+}
+
+# Ordered tool lists passed to the Search agent's user message as a priority hint.
+_ROUTE_TO_TOOL_PRIORITY: dict[str, list[str]] = {
+    "osm_first": ["osm_nearby", "wikipedia_summary", "tavily_search"],
+    "wikidata_first": ["wikidata_query", "wikipedia_summary", "tavily_search"],
+    "default": ["wikipedia_summary", "wikidata_query", "tavily_search"],
+}
+
 
 class LensState(TypedDict):
     input: LensInput
@@ -40,6 +56,7 @@ class LensState(TypedDict):
     errors: list[str]
     _start_time: float
     _cache_key: str
+    search_route: str  # "default" | "osm_first" | "wikidata_first" | "skip"
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +84,7 @@ def plan_node(state: LensState) -> LensState:
         "errors": [],
         "_start_time": time.monotonic(),
         "_cache_key": cache_key,
+        "search_route": "default",
     }
 
 
@@ -98,6 +116,7 @@ async def _safe_search(
     state: LensState,
     vision: VisionResult | None,
     memory: MemoryResult | None,
+    tool_priority: list[str] | None = None,
 ) -> SearchResult | None:
     from src.agents.search import run_search_agent
 
@@ -114,6 +133,7 @@ async def _safe_search(
             lat=state["input"].lat,
             lng=state["input"].lng,
             cost_log=state["cost_log"],
+            tool_priority=tool_priority,
         )
     except Exception as exc:
         logger.warning("Search agent failed: %s", exc)
@@ -150,21 +170,30 @@ async def vision_memory_node(state: LensState) -> LensState:
     return {**state, "vision_result": vision_result, "memory_result": memory_result}
 
 
-def _should_search(state: LensState) -> str:
-    """Skip Search entirely when Vision has no useful identification."""
+def route_node(state: LensState) -> LensState:
+    """Set search_route based on Vision confidence + entity_type."""
     vision = state["vision_result"]
     if vision is None or vision.needs_fallback or vision.confidence_level == "guessing":
         logger.info(
-            "Confidence gate: skipping Search (confidence=%s, needs_fallback=%s)",
+            "Route: skip (confidence=%s, needs_fallback=%s)",
             vision.confidence_level if vision else "none",
             vision.needs_fallback if vision else True,
         )
-        return "fuse"
-    return "search"
+        return {**state, "search_route": "skip"}
+    route = _ENTITY_ROUTE.get(vision.entity_type, "default")
+    logger.info("Route: %s (entity_type=%s)", route, vision.entity_type)
+    return {**state, "search_route": route}
+
+
+def _should_search_after_route(state: LensState) -> str:
+    return "fuse" if state["search_route"] == "skip" else "search"
 
 
 async def search_node(state: LensState) -> LensState:
-    search_result = await _safe_search(state, state["vision_result"], state["memory_result"])
+    tool_priority = _ROUTE_TO_TOOL_PRIORITY.get(state["search_route"])
+    search_result = await _safe_search(
+        state, state["vision_result"], state["memory_result"], tool_priority
+    )
     return {**state, "search_result": search_result}
 
 
@@ -258,6 +287,7 @@ def _build_graph() -> StateGraph:
     g.add_node("plan", plan_node)
     g.add_node("cache_check", cache_check_node)
     g.add_node("vision_memory", vision_memory_node)
+    g.add_node("route", route_node)
     g.add_node("search", search_node)
     g.add_node("fuse", fuse_node)
     g.add_node("write_memory", write_memory_node)
@@ -268,7 +298,10 @@ def _build_graph() -> StateGraph:
         _should_run_agents,
         {"vision_memory": "vision_memory", "done": "write_memory"},
     )
-    g.add_conditional_edges("vision_memory", _should_search, {"search": "search", "fuse": "fuse"})
+    g.add_edge("vision_memory", "route")
+    g.add_conditional_edges(
+        "route", _should_search_after_route, {"search": "search", "fuse": "fuse"}
+    )
     g.add_edge("search", "fuse")
     g.add_edge("fuse", "write_memory")
     g.add_edge("write_memory", END)
@@ -321,6 +354,7 @@ async def stream_pipeline(inp: LensInput):
         "errors": errors,
         "_start_time": start,
         "_cache_key": "",
+        "search_route": "default",
     }
 
     vision_result, memory_result = await asyncio.gather(
@@ -334,7 +368,12 @@ async def stream_pipeline(inp: LensInput):
         and not vision_result.needs_fallback
         and vision_result.confidence_level != "guessing"
     ):
-        search_result = await _safe_search(fake_state, vision_result, memory_result)
+        route = _ENTITY_ROUTE.get(vision_result.entity_type, "default")
+        if route != "skip":
+            tool_priority = _ROUTE_TO_TOOL_PRIORITY.get(route)
+            search_result = await _safe_search(
+                fake_state, vision_result, memory_result, tool_priority
+            )
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     cost_usd_so_far = sum(e.cost_usd for e in cost_log)
@@ -380,6 +419,7 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "errors": [],
         "_start_time": time.monotonic(),
         "_cache_key": "",
+        "search_route": "default",
     }
     return await asyncio.wait_for(
         _graph.ainvoke(initial, config=_run_config(inp)),  # type: ignore[arg-type]
