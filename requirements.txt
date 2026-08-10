@@ -15,6 +15,8 @@ Pillow>=12.3.0
 streamlit>=1.60.0
 
 # API server
+fastapi>=0.115.0
+uvicorn>=0.52.0
 fastapi>=0.141.1
 uvicorn>=0.30.0
 python-multipart>=0.0.9
