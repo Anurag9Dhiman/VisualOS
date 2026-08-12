@@ -20,8 +20,9 @@ from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 
-from src.contracts import LensInput
-from src.orchestrator import run_pipeline, stream_pipeline
+from src.contracts import LensInput, NormalCard, ScanContext
+from src.orchestrator import LensState, run_pipeline, stream_pipeline
+from src.session_store import create_session, get_session
 
 logger = logging.getLogger("lens.server")
 
@@ -29,6 +30,30 @@ app = FastAPI(title="Lens OS API", version="0.1.0")
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _store_session(state: LensState, user_id: str) -> ScanContext | None:
+    """Build and store a ScanContext from a completed pipeline state."""
+    vision = state.get("vision_result")
+    card = state.get("response_card")
+    search = state.get("search_result")
+    if vision is None or card is None:
+        return None
+    card_body = card.body if isinstance(card, NormalCard) else card.observation
+    historical_facts = search.historical_facts if search else []
+    live_facts = search.live_facts if search else []
+    nearby_context = search.nearby_context if search else ""
+    return create_session(
+        entity_name=vision.entity_name,
+        entity_type=vision.entity_type,
+        confidence_level=vision.confidence_level,
+        card_headline=card.headline,
+        card_body=card_body,
+        historical_facts=historical_facts,
+        live_facts=live_facts,
+        nearby_context=nearby_context,
+        user_id=user_id,
+    )
 
 
 async def _require_api_key(key: str | None = Security(_api_key_header)) -> None:
@@ -81,7 +106,8 @@ async def analyze(
     if card is None:
         raise HTTPException(status_code=500, detail="Pipeline produced no card")
 
-    return card.model_dump()
+    session = _store_session(state, user_id)
+    return {"card": card.model_dump(), "session_id": session.session_id if session else None}
 
 
 @app.post("/analyze/stream", dependencies=[Security(_require_api_key)])
@@ -111,10 +137,25 @@ async def analyze_stream(
                     yield f"data: {json.dumps({'type': 'token', 'text': chunk})}\n\n"
                 else:
                     card = state.get("response_card")
-                    yield f"data: {json.dumps({'type': 'card', 'card': card.model_dump() if card else None})}\n\n"
+                    session = _store_session(state, user_id)
+                    yield f"data: {json.dumps({'type': 'card', 'card': card.model_dump() if card else None, 'session_id': session.session_id if session else None})}\n\n"
         except TimeoutError:
             yield f"data: {json.dumps({'type': 'error', 'detail': 'Pipeline timed out'})}\n\n"
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
     return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+@app.get("/session/{session_id}", dependencies=[Security(_require_api_key)])
+async def get_scan_session(session_id: str) -> dict:
+    """Return the full scan context for a completed pipeline run.
+
+    Called by the voice AI repo to ground multi-turn follow-up conversations
+    in the original scan output. Returns 404 if the session is unknown or
+    has expired (TTL: 1 hour).
+    """
+    ctx = get_session(session_id)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    return ctx.model_dump(mode="json")

@@ -79,8 +79,10 @@ async def test_analyze_returns_normal_card(client: AsyncClient):
             )
     assert r.status_code == 200
     body = r.json()
-    assert body["card_type"] == "normal"
-    assert body["headline"] == "Eiffel Tower"
+    assert "card" in body
+    assert "session_id" in body
+    assert body["card"]["card_type"] == "normal"
+    assert body["card"]["headline"] == "Eiffel Tower"
 
 
 async def test_analyze_passes_lat_lng_to_pipeline(client: AsyncClient):
