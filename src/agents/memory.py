@@ -16,7 +16,7 @@ from src.db import get_user_interests
 logger = logging.getLogger("lens.memory")
 
 _EMBED_MODEL = "text-embedding-004"
-_TIMEOUT_S = 0.8
+_TIMEOUT_S = 5.0
 
 
 async def run_memory_agent(
@@ -24,7 +24,7 @@ async def run_memory_agent(
     user_id: str,
     cost_log: list[CostEntry],
 ) -> MemoryResult:
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
     await rate_limiter.acquire(_EMBED_MODEL)
     embed_resp = await asyncio.wait_for(

@@ -213,8 +213,8 @@ def main() -> None:
     st.title("🔍 Lens OS — Pipeline Inspector")
     st.caption("Phase 0 dev tool — upload an image and inspect every agent's output.")
 
-    if not os.environ.get("GOOGLE_API_KEY"):
-        st.error("GOOGLE_API_KEY not set. Add it to your .env file and restart.")
+    if not os.environ.get("GEMINI_API_KEY"):
+        st.error("GEMINI_API_KEY not set. Add it to your .env file and restart.")
         st.stop()
 
     # Sidebar — inputs

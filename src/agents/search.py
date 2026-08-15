@@ -27,8 +27,8 @@ from src.tools.wikipedia_client import wikipedia_search
 
 logger = logging.getLogger("lens.search")
 
-_MODEL = "gemini-2.0-flash"
-_TIMEOUT_S = 0.8
+_MODEL = "gemini-3.5-flash"
+_TIMEOUT_S = 5.0
 
 
 async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
@@ -100,7 +100,7 @@ async def run_search_agent(
     cost_log: list[CostEntry],
     tool_priority: list[str] | None = None,
 ) -> SearchResult:
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
     user_msg = build_search_user_message(
         entity_name, entity_type, vision_confidence_level, location, user_interests, tool_priority

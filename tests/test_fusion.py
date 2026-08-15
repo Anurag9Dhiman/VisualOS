@@ -123,7 +123,7 @@ async def _fake_stream(chunks):
 
 @pytest.mark.asyncio
 async def test_stream_fusion_yields_chunks_then_card(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import stream_fusion
 
     parts = ['"card_type": "normal"', ', "headline": "Eiffel"', ', "body": "tall tower."']
@@ -158,7 +158,7 @@ async def test_stream_fusion_yields_chunks_then_card(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stream_fusion_logs_cost_from_last_chunk(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import stream_fusion
 
     full_json = json.dumps(
@@ -195,7 +195,7 @@ async def test_stream_fusion_logs_cost_from_last_chunk(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stream_fusion_error_yields_fallback(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import stream_fusion
 
     async def _error_stream():

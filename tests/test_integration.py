@@ -1,7 +1,7 @@
 """End-to-end integration tests — hit real Gemini APIs.
 
 These tests are SKIPPED unless both environment variables are set:
-    GOOGLE_API_KEY   your Gemini API key
+    GEMINI_API_KEY   your Gemini API key
     TEST_IMAGE_PATH  path to a JPEG/PNG of a building, monument, or object
 
 Optional variables:
@@ -9,7 +9,7 @@ Optional variables:
     TEST_LNG   longitude of the image location (default: 77.5848 — Bangalore)
 
 Run with:
-    GOOGLE_API_KEY=... TEST_IMAGE_PATH=path/to/photo.jpg pytest -m integration -v
+    GEMINI_API_KEY=... TEST_IMAGE_PATH=path/to/photo.jpg pytest -m integration -v
 
 Or via Makefile:
     make integration IMAGE=path/to/photo.jpg
@@ -27,14 +27,14 @@ from src.contracts import LensInput
 # Module-level skip condition — applied to every test in this file
 # ---------------------------------------------------------------------------
 
-_API_KEY = os.environ.get("GOOGLE_API_KEY")
+_API_KEY = os.environ.get("GEMINI_API_KEY")
 _IMAGE_PATH = os.environ.get("TEST_IMAGE_PATH")
 
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
         not _API_KEY or not _IMAGE_PATH,
-        reason="Set GOOGLE_API_KEY and TEST_IMAGE_PATH to run integration tests",
+        reason="Set GEMINI_API_KEY and TEST_IMAGE_PATH to run integration tests",
     ),
 ]
 
