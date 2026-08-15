@@ -74,7 +74,7 @@ _VALID_VISION_JSON = {
 
 @pytest.mark.asyncio
 async def test_vision_agent_success(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_VISION_JSON))
@@ -99,7 +99,7 @@ async def test_vision_agent_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vision_agent_guessing_sets_fallback(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     guessing = {**_VALID_VISION_JSON, "confidence_level": "guessing", "needs_fallback": True}
@@ -119,7 +119,7 @@ async def test_vision_agent_guessing_sets_fallback(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vision_agent_timeout_propagates(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     async def _slow(*_, **__):
@@ -138,7 +138,7 @@ async def test_vision_agent_timeout_propagates(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vision_agent_logs_cost(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_VISION_JSON), in_tokens=200, out_tokens=80)
@@ -160,7 +160,7 @@ async def test_vision_agent_logs_cost(monkeypatch):
 @pytest.mark.asyncio
 async def test_vision_agent_retries_on_bad_json(monkeypatch):
     """First response is invalid JSON; second response is valid — result should succeed."""
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     bad_resp = _mock_genai_response("not json at all")
@@ -188,7 +188,7 @@ async def test_vision_agent_retries_on_bad_json(monkeypatch):
 @pytest.mark.asyncio
 async def test_vision_agent_raises_after_two_failures(monkeypatch):
     """Both attempts return invalid JSON — agent raises ValueError."""
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.vision import run_vision_agent
 
     bad_resp = _mock_genai_response("{bad json")
@@ -212,7 +212,7 @@ async def test_vision_agent_raises_after_two_failures(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src import db
     from src.agents.memory import run_memory_agent
 
@@ -241,7 +241,7 @@ async def test_memory_agent_returns_hits(monkeypatch, tmp_db):
 
 @pytest.mark.asyncio
 async def test_memory_agent_filters_low_similarity(monkeypatch, tmp_db):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src import db
     from src.agents.memory import run_memory_agent
 
@@ -270,7 +270,7 @@ async def test_memory_agent_filters_low_similarity(monkeypatch, tmp_db):
 
 @pytest.mark.asyncio
 async def test_memory_agent_empty_db(monkeypatch, tmp_db):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.memory import run_memory_agent
 
     with (
@@ -310,7 +310,7 @@ _VALID_SEARCH_JSON = {
 
 @pytest.mark.asyncio
 async def test_search_agent_success(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.search import run_search_agent
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_SEARCH_JSON))
@@ -342,7 +342,7 @@ async def test_search_agent_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_search_agent_timeout_returns_fallback(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.search import run_search_agent
 
     async def _slow(*_, **__):
@@ -372,7 +372,7 @@ async def test_search_agent_timeout_returns_fallback(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_search_agent_invalid_json_returns_fallback(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.agents.search import run_search_agent
 
     mock_resp = _mock_genai_response("not valid json at all")
@@ -428,7 +428,7 @@ _VALID_FALLBACK_JSON = {
 
 @pytest.mark.asyncio
 async def test_fusion_returns_normal_card(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.contracts import MemoryResult, VisionResult
     from src.fusion import run_fusion
 
@@ -454,7 +454,7 @@ async def test_fusion_returns_normal_card(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fusion_returns_fallback_card(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import run_fusion
 
     mock_resp = _mock_genai_response(json.dumps(_VALID_FALLBACK_JSON))
@@ -475,7 +475,7 @@ async def test_fusion_returns_fallback_card(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fusion_timeout_returns_fallback(monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import run_fusion
 
     async def _slow(*_, **__):
@@ -497,7 +497,7 @@ async def test_fusion_timeout_returns_fallback(monkeypatch):
 @pytest.mark.asyncio
 async def test_fusion_invalid_json_returns_fallback(monkeypatch):
     """Both attempts return bad JSON — should exhaust retries and return FallbackCard."""
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import run_fusion
 
     bad_resp = _mock_genai_response("{bad json}")
@@ -519,7 +519,7 @@ async def test_fusion_invalid_json_returns_fallback(monkeypatch):
 @pytest.mark.asyncio
 async def test_fusion_retries_on_bad_json(monkeypatch):
     """First response is invalid JSON; second response is a valid normal card."""
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     from src.fusion import run_fusion
 
     bad_resp = _mock_genai_response("not json")

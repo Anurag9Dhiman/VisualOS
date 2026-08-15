@@ -213,7 +213,7 @@ async def test_cache_check_hit_sets_fallback_card():
 
 @pytest.mark.asyncio
 async def test_run_pipeline_cache_hit_skips_agents(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
@@ -234,7 +234,7 @@ async def test_run_pipeline_cache_hit_skips_agents(tmp_db, tmp_path, monkeypatch
 
 @pytest.mark.asyncio
 async def test_run_pipeline_confident_vision_calls_search(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
@@ -261,7 +261,7 @@ async def test_run_pipeline_confident_vision_calls_search(tmp_db, tmp_path, monk
 
 @pytest.mark.asyncio
 async def test_run_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
@@ -338,7 +338,7 @@ async def _fake_stream_fusion(vision, memory, search, cost_log, cost_usd, latenc
 
 @pytest.mark.asyncio
 async def test_stream_pipeline_yields_chunks_then_final_state(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
@@ -368,7 +368,7 @@ async def test_stream_pipeline_yields_chunks_then_final_state(tmp_db, tmp_path, 
 
 @pytest.mark.asyncio
 async def test_stream_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)
@@ -398,7 +398,7 @@ async def test_stream_pipeline_guessing_vision_skips_search(tmp_db, tmp_path, mo
 
 @pytest.mark.asyncio
 async def test_stream_pipeline_passes_search_result_when_confident(tmp_db, tmp_path, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     img_path = tmp_path / "scene.jpg"
     _make_jpeg(img_path)
     inp = LensInput(image_path=str(img_path), lat=12.95, lng=77.58)

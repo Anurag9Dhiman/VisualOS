@@ -21,8 +21,8 @@ from src.prompts import VISION_SYSTEM_PROMPT, GeoPoint
 
 logger = logging.getLogger("lens.vision")
 
-_MODEL = "gemini-2.0-flash"
-_TIMEOUT_S = 0.8
+_MODEL = "gemini-3.5-flash"
+_TIMEOUT_S = 5.0
 _MAX_DIMENSION = 1024
 _JPEG_QUALITY = 85
 
@@ -91,7 +91,7 @@ async def run_vision_agent(
     lng: float | None,
     cost_log: list[CostEntry],
 ) -> VisionResult:
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
     location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
     prompt = (

@@ -29,8 +29,8 @@ from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
 
 logger = logging.getLogger("lens.fusion")
 
-_MODEL = "gemini-2.0-flash"
-_TIMEOUT_S = 0.8
+_MODEL = "gemini-3.5-flash"
+_TIMEOUT_S = 5.0
 
 
 def _vision_dict(vision: VisionResult | None) -> dict:
@@ -101,7 +101,7 @@ async def run_fusion(
     latency_ms: int,
     user_locale: str = "en-IN",
 ) -> ResponseCard:
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     user_msg = build_fusion_user_message(
         _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
     )
@@ -290,7 +290,7 @@ async def stream_fusion(
 ) -> AsyncIterator[tuple[str, ResponseCard | None]]:
     """Async generator — yields (chunk, None) for each token chunk,
     then (full_text, card) as the final item once streaming completes."""
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     user_msg = build_fusion_user_message(
         _vision_dict(vision), _memory_dict(memory), _search_dict(search), user_locale
     )

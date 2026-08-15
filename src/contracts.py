@@ -221,3 +221,29 @@ class OSMResult(BaseModel):
     address: str | None
     opening_hours: str | None
     wheelchair: str | None
+
+
+# ---------------------------------------------------------------------------
+# Voice AI session context — passed to external voice repo via GET /session
+# ---------------------------------------------------------------------------
+
+
+class ScanContext(BaseModel):
+    """Full scan context stored after every pipeline run.
+
+    The voice repo fetches this via GET /session/{session_id} to ground
+    multi-turn follow-up conversations in the original scan.
+    """
+
+    session_id: str
+    entity_name: str
+    entity_type: str
+    confidence_level: str
+    card_headline: str
+    card_body: str
+    historical_facts: list[HistoricalFact]
+    live_facts: list[LiveFact]
+    nearby_context: str
+    user_id: str
+    scanned_at: datetime
+    expires_at: datetime

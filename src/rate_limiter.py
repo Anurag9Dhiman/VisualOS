@@ -21,6 +21,7 @@ _WINDOW_S = 60.0
 
 # Gemini free-tier defaults: https://ai.google.dev/gemini-api/docs/rate-limits
 _LIMITS: dict[str, int] = {
+    "gemini-3.5-flash": 15,
     "gemini-2.0-flash": 15,
     "text-embedding-004": 1500,
 }

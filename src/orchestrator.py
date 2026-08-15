@@ -26,7 +26,7 @@ from src.contracts import (
 
 logger = logging.getLogger("lens.orchestrator")
 
-_OVERALL_TIMEOUT_S = 2.5
+_OVERALL_TIMEOUT_S = 15.0
 
 # Maps entity_type → which search tools to prioritise first.
 _ENTITY_ROUTE: dict[str, str] = {
@@ -257,7 +257,7 @@ async def _write_memory_async(
     from src import db
     from src.cost_logger import log_cost
 
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     try:
         embed_resp = await client.aio.models.embed_content(
             model="text-embedding-004",
