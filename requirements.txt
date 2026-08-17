@@ -25,7 +25,7 @@ python-multipart>=0.0.9
 pydantic>=2.8.0
 
 # Config
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 
 # Testing
 pytest>=9.1.1
