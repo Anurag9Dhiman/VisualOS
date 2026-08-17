@@ -1,6 +1,6 @@
 # Core
 google-genai>=1.0.0
-langgraph>=0.2.0
+langgraph>=1.2.11
 langchain-core>=1.5.2
 langsmith>=0.1.0
 langchain-core>=0.3.0
