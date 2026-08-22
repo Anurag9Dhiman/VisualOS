@@ -19,6 +19,7 @@ from src.contracts import (
     LensInput,
     MemoryResult,
     NormalCard,
+    ReasoningTrace,
     ResponseCard,
     SearchResult,
     VisionResult,
@@ -50,6 +51,7 @@ class LensState(TypedDict):
     image_b64: str
     vision_result: VisionResult | None
     memory_result: MemoryResult | None
+    reasoning_trace: ReasoningTrace | None
     search_result: SearchResult | None
     response_card: ResponseCard | None
     cost_log: list[CostEntry]
@@ -78,6 +80,7 @@ def plan_node(state: LensState) -> LensState:
         "image_b64": image_b64,
         "vision_result": None,
         "memory_result": None,
+        "reasoning_trace": None,
         "search_result": None,
         "response_card": None,
         "cost_log": [],
@@ -117,6 +120,7 @@ async def _safe_search(
     vision: VisionResult | None,
     memory: MemoryResult | None,
     tool_priority: list[str] | None = None,
+    research_brief: str | None = None,
 ) -> SearchResult | None:
     from src.agents.search import run_search_agent
 
@@ -134,6 +138,7 @@ async def _safe_search(
             lng=state["input"].lng,
             cost_log=state["cost_log"],
             tool_priority=tool_priority,
+            research_brief=research_brief,
         )
     except Exception as exc:
         logger.warning("Search agent failed: %s", exc)
@@ -170,6 +175,28 @@ async def vision_memory_node(state: LensState) -> LensState:
     return {**state, "vision_result": vision_result, "memory_result": memory_result}
 
 
+async def _safe_reasoning(state: LensState) -> ReasoningTrace | None:
+    from src.agents.reasoning import run_reasoning_agent
+
+    try:
+        return await run_reasoning_agent(
+            state["vision_result"],
+            state["memory_result"],
+            state["input"].lat,
+            state["input"].lng,
+            state["cost_log"],
+        )
+    except Exception as exc:
+        logger.warning("Reasoning agent failed: %s", exc)
+        state["errors"].append(f"reasoning: {exc}")
+        return None
+
+
+async def reasoning_node(state: LensState) -> LensState:
+    reasoning_trace = await _safe_reasoning(state)
+    return {**state, "reasoning_trace": reasoning_trace}
+
+
 def route_node(state: LensState) -> LensState:
     """Set search_route based on Vision confidence + entity_type."""
     vision = state["vision_result"]
@@ -190,9 +217,16 @@ def _should_search_after_route(state: LensState) -> str:
 
 
 async def search_node(state: LensState) -> LensState:
-    tool_priority = _ROUTE_TO_TOOL_PRIORITY.get(state["search_route"])
+    reasoning = state.get("reasoning_trace")
+    # Reasoning-suggested priority wins; fall back to static route table.
+    tool_priority = (
+        reasoning.suggested_tool_priority or _ROUTE_TO_TOOL_PRIORITY.get(state["search_route"])
+        if reasoning
+        else _ROUTE_TO_TOOL_PRIORITY.get(state["search_route"])
+    )
+    research_brief = reasoning.research_brief if reasoning else None
     search_result = await _safe_search(
-        state, state["vision_result"], state["memory_result"], tool_priority
+        state, state["vision_result"], state["memory_result"], tool_priority, research_brief
     )
     return {**state, "search_result": search_result}
 
@@ -287,6 +321,7 @@ def _build_graph() -> StateGraph:
     g.add_node("plan", plan_node)
     g.add_node("cache_check", cache_check_node)
     g.add_node("vision_memory", vision_memory_node)
+    g.add_node("reasoning", reasoning_node)
     g.add_node("route", route_node)
     g.add_node("search", search_node)
     g.add_node("fuse", fuse_node)
@@ -298,7 +333,8 @@ def _build_graph() -> StateGraph:
         _should_run_agents,
         {"vision_memory": "vision_memory", "done": "write_memory"},
     )
-    g.add_edge("vision_memory", "route")
+    g.add_edge("vision_memory", "reasoning")
+    g.add_edge("reasoning", "route")
     g.add_conditional_edges(
         "route", _should_search_after_route, {"search": "search", "fuse": "fuse"}
     )
@@ -348,6 +384,7 @@ async def stream_pipeline(inp: LensInput):
         "image_b64": image_b64,
         "vision_result": None,
         "memory_result": None,
+        "reasoning_trace": None,
         "search_result": None,
         "response_card": None,
         "cost_log": cost_log,
@@ -361,6 +398,10 @@ async def stream_pipeline(inp: LensInput):
         _safe_vision(fake_state),
         _safe_memory(fake_state, inp.image_path),
     )
+    fake_state = {**fake_state, "vision_result": vision_result, "memory_result": memory_result}
+
+    reasoning_trace = await _safe_reasoning(fake_state)
+    fake_state = {**fake_state, "reasoning_trace": reasoning_trace}
 
     search_result = None
     if (
@@ -370,9 +411,14 @@ async def stream_pipeline(inp: LensInput):
     ):
         route = _ENTITY_ROUTE.get(vision_result.entity_type, "default")
         if route != "skip":
-            tool_priority = _ROUTE_TO_TOOL_PRIORITY.get(route)
+            tool_priority = (
+                reasoning_trace.suggested_tool_priority or _ROUTE_TO_TOOL_PRIORITY.get(route)
+                if reasoning_trace
+                else _ROUTE_TO_TOOL_PRIORITY.get(route)
+            )
+            research_brief = reasoning_trace.research_brief if reasoning_trace else None
             search_result = await _safe_search(
-                fake_state, vision_result, memory_result, tool_priority
+                fake_state, vision_result, memory_result, tool_priority, research_brief
             )
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -413,6 +459,7 @@ async def run_pipeline(inp: LensInput) -> LensState:
         "image_b64": "",
         "vision_result": None,
         "memory_result": None,
+        "reasoning_trace": None,
         "search_result": None,
         "response_card": None,
         "cost_log": [],

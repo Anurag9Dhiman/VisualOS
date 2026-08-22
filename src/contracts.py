@@ -92,6 +92,19 @@ class MemoryResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Reasoning Agent
+# ---------------------------------------------------------------------------
+
+
+class ReasoningTrace(BaseModel):
+    what_we_know: str
+    key_unknowns: Annotated[list[str], Field(max_length=3)]
+    research_brief: str
+    suggested_tool_priority: list[str] = []
+    memory_context: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Search Agent
 # ---------------------------------------------------------------------------
 
