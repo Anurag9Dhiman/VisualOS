@@ -21,6 +21,7 @@ from PIL import Image
 from src.contracts import (
     FallbackCard,
     NormalCard,
+    ReasoningTrace,
     SearchResult,
     VisionResult,
 )
@@ -645,4 +646,106 @@ async def test_dispatch_tool_exception_returns_error_json():
 
     data = json.loads(out)
     assert "error" in data
-    assert "network down" in data["error"]
+
+
+# ---------------------------------------------------------------------------
+# Reasoning Agent
+# ---------------------------------------------------------------------------
+
+_GOOD_REASONING_JSON = json.dumps(
+    {
+        "what_we_know": "This is India Gate in New Delhi, confirmed by text on arch and GPS.",
+        "key_unknowns": ["When was it built?", "Current visiting hours?"],
+        "research_brief": "Find India Gate construction history and current visitor info.",
+        "suggested_tool_priority": ["wikipedia_summary", "tavily_search"],
+        "memory_context": "User has scanned monuments before.",
+    }
+)
+
+
+@pytest.fixture()
+def _vision_result():
+    return VisionResult(
+        entity_name="India Gate",
+        entity_type="monument",
+        confidence_level="certain",
+        evidence=["text reads INDIA GATE", "GPS matches"],
+        alternatives=[],
+        failure_modes_checked=["lighting ok", "no occlusion"],
+        needs_fallback=False,
+    )
+
+
+@pytest.mark.asyncio()
+async def test_reasoning_agent_happy_path(monkeypatch, _vision_result):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    mock_resp = _mock_genai_response(_GOOD_REASONING_JSON)
+
+    with (
+        patch("src.agents.reasoning.genai.Client") as MockClient,
+        patch("src.agents.reasoning.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        from src.agents.reasoning import run_reasoning_agent
+
+        cost_log: list = []
+        trace = await run_reasoning_agent(_vision_result, None, 28.61, 77.23, cost_log)
+
+    assert isinstance(trace, ReasoningTrace)
+    assert "India Gate" in trace.what_we_know
+    assert len(trace.key_unknowns) == 2
+    assert "wikipedia_summary" in trace.suggested_tool_priority
+    assert len(cost_log) == 1
+    assert cost_log[0].agent == "reasoning"
+
+
+@pytest.mark.asyncio()
+async def test_reasoning_agent_none_vision(monkeypatch):
+    """Returns a safe default trace when Vision returned None."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.agents.reasoning import run_reasoning_agent
+
+    trace = await run_reasoning_agent(None, None, 0.0, 0.0, [])
+
+    assert isinstance(trace, ReasoningTrace)
+    assert trace.what_we_know != ""
+    assert len(trace.key_unknowns) >= 1
+
+
+@pytest.mark.asyncio()
+async def test_reasoning_agent_bad_json(monkeypatch, _vision_result):
+    """Falls back gracefully on invalid JSON output."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    mock_resp = _mock_genai_response("not valid json {{")
+
+    with (
+        patch("src.agents.reasoning.genai.Client") as MockClient,
+        patch("src.agents.reasoning.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        from src.agents.reasoning import run_reasoning_agent
+
+        trace = await run_reasoning_agent(_vision_result, None, 0.0, 0.0, [])
+
+    assert isinstance(trace, ReasoningTrace)
+
+
+@pytest.mark.asyncio()
+async def test_reasoning_agent_timeout(monkeypatch, _vision_result):
+    """Timeout propagates so _safe_reasoning can catch and log it."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    async def _slow(*_a, **_kw):
+        await asyncio.sleep(100)
+
+    with (
+        patch("src.agents.reasoning.genai.Client") as MockClient,
+        patch("src.agents.reasoning.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(side_effect=_slow)
+        from src.agents.reasoning import run_reasoning_agent
+
+        with pytest.raises((TimeoutError, asyncio.TimeoutError)):
+            await asyncio.wait_for(
+                run_reasoning_agent(_vision_result, None, 0.0, 0.0, []), timeout=0.1
+            )

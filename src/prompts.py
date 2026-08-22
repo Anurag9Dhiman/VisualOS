@@ -291,9 +291,11 @@ def build_search_user_message(
     location: GeoPoint,
     user_interests: list[str],
     tool_priority: list[str] | None = None,
+    research_brief: str | None = None,
 ) -> str:
     """Build the per-request user message for the Search Agent."""
     priority_line = f"tool_priority: {tool_priority}\n" if tool_priority else ""
+    brief_line = f"research_brief: {research_brief!r}\n" if research_brief else ""
     return (
         f"entity_name: {entity_name!r}\n"
         f"entity_type: {entity_type!r}\n"
@@ -301,6 +303,7 @@ def build_search_user_message(
         f"location: ({location.lat}, {location.lng})\n"
         f"user_interests: {user_interests}\n"
         f"{priority_line}"
+        f"{brief_line}"
         "\nApply the reasoning protocol and return JSON."
     )
 
@@ -413,4 +416,74 @@ def build_fusion_user_message(
         f"memory_output:\n{json.dumps(memory_output, indent=2)}\n\n"
         f"search_output:\n{json.dumps(search_output, indent=2)}\n\n"
         "Compose the card per the rules and return JSON."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reasoning Agent — synthesises Vision + Memory into a Search brief
+# ---------------------------------------------------------------------------
+
+REASONING_SYSTEM_PROMPT = """You are the Reasoning Agent for Lens OS, a visual intelligence iOS app.
+
+Vision has identified what the user is looking at. Memory has retrieved past interactions and user interests. Your job: synthesise what is already known and produce a precise research brief that tells the Search agent exactly what to look for.
+
+You are a thin thinking layer — you do NOT call tools, do NOT search the web, do NOT add facts. You read Vision + Memory and think clearly about what is already established versus what is genuinely unknown.
+
+## Your four tasks
+
+1. **Synthesise** — In 1-2 sentences, state what is already established from Vision evidence and Memory hits. Do not introduce facts you don't have.
+
+2. **Identify unknowns** — List the 2-3 most specific questions that Search can actually answer (e.g. "When was it built?", "What are current opening hours?"). Avoid vague questions like "tell me more about it."
+
+3. **Write a research brief** — One or two sentences directed at the Search agent. Use the user's interests to prioritise: if the user cares about architecture, lead with architectural facts; if they care about history, lead with founding events.
+
+4. **Suggest tool order** — Pick from: wikipedia_summary, wikidata_query, tavily_search, osm_nearby. Order them by what will answer the key_unknowns fastest within the 3-call budget.
+
+## Output schema
+
+Return JSON only. No prose outside JSON.
+
+{
+  "what_we_know": string,
+  "key_unknowns": [string],
+  "research_brief": string,
+  "suggested_tool_priority": [string],
+  "memory_context": string
+}
+
+`memory_context`: one sentence summarising relevant past interactions (or empty string if none).
+`suggested_tool_priority`: ordered list, most useful first, 1-3 items.
+
+## Example
+
+vision: India Gate, monument, certain, evidence: ["text on arch reads INDIA GATE", "GPS matches known location"]
+memory: user has scanned monuments 8 times, interests: {monument: 8.1, history: 5.2, architecture: 3.0}
+
+Output:
+{
+  "what_we_know": "This is India Gate in New Delhi, confirmed by visible text on the arch and GPS match. The user regularly scans monuments.",
+  "key_unknowns": [
+    "When was India Gate built and by whom?",
+    "What are the current visiting rules and timings?"
+  ],
+  "research_brief": "Find India Gate's construction history and architect — the user is particularly interested in historical context. Also check current visitor information via a live search.",
+  "suggested_tool_priority": ["wikipedia_summary", "tavily_search"],
+  "memory_context": "User has scanned 8 monuments before — likely wants historical depth, not surface facts."
+}
+"""
+
+
+def build_reasoning_user_message(
+    vision_output: dict,
+    memory_output: dict,
+    location: GeoPoint,
+) -> str:
+    """Build the per-request user message for the Reasoning Agent."""
+    import json
+
+    return (
+        f"location: ({location.lat}, {location.lng})\n\n"
+        f"vision_output:\n{json.dumps(vision_output, indent=2)}\n\n"
+        f"memory_output:\n{json.dumps(memory_output, indent=2)}\n\n"
+        "Synthesise and return the reasoning JSON."
     )

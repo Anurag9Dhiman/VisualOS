@@ -99,11 +99,18 @@ async def run_search_agent(
     lng: float | None,
     cost_log: list[CostEntry],
     tool_priority: list[str] | None = None,
+    research_brief: str | None = None,
 ) -> SearchResult:
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
     user_msg = build_search_user_message(
-        entity_name, entity_type, vision_confidence_level, location, user_interests, tool_priority
+        entity_name,
+        entity_type,
+        vision_confidence_level,
+        location,
+        user_interests,
+        tool_priority,
+        research_brief,
     )
 
     await rate_limiter.acquire(_MODEL)
