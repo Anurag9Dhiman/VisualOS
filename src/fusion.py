@@ -30,7 +30,7 @@ from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
 logger = logging.getLogger("lens.fusion")
 
 _MODEL = "gemini-3.5-flash"
-_TIMEOUT_S = 5.0
+_TIMEOUT_S = 12.0
 
 
 def _vision_dict(vision: VisionResult | None) -> dict:
@@ -140,7 +140,7 @@ async def run_fusion(
                     config=types.GenerateContentConfig(
                         system_instruction=FUSION_SYSTEM_PROMPT,
                         response_mime_type="application/json",
-                        max_output_tokens=1200,
+                        max_output_tokens=2000,
                     ),
                 ),
                 timeout=_TIMEOUT_S,
@@ -304,7 +304,8 @@ async def stream_fusion(
             contents=user_msg,
             config=types.GenerateContentConfig(
                 system_instruction=FUSION_SYSTEM_PROMPT,
-                max_output_tokens=1200,
+                response_mime_type="application/json",
+                max_output_tokens=2000,
             ),
         ):
             if chunk.text:

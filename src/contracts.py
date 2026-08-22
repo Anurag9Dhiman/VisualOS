@@ -153,7 +153,7 @@ class PersonalizedHook(BaseModel):
 class Citation(BaseModel):
     id: str
     source_name: str
-    url: str
+    url: str | None = None
     as_of: str | None = None
 
 

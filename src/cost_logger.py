@@ -14,6 +14,7 @@ logger = logging.getLogger("lens.cost")
 _PRICES: dict[str, tuple[float, float]] = {
     "gemini-3.5-flash": (0.000075, 0.0003),
     "gemini-2.0-flash": (0.000075, 0.0003),
+    "gemini-embedding-001": (0.000025, 0.0),
     "text-embedding-004": (0.000025, 0.0),
 }
 

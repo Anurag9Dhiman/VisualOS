@@ -26,7 +26,7 @@ from src.contracts import (
 
 logger = logging.getLogger("lens.orchestrator")
 
-_OVERALL_TIMEOUT_S = 15.0
+_OVERALL_TIMEOUT_S = 45.0
 
 # Maps entity_type → which search tools to prioritise first.
 _ENTITY_ROUTE: dict[str, str] = {
