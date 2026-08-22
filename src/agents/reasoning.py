@@ -67,9 +67,7 @@ async def run_reasoning_agent(
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     location = GeoPoint(lat=lat or 0.0, lng=lng or 0.0)
-    user_msg = build_reasoning_user_message(
-        _vision_dict(vision), _memory_dict(memory), location
-    )
+    user_msg = build_reasoning_user_message(_vision_dict(vision), _memory_dict(memory), location)
 
     await rate_limiter.acquire(_MODEL)
     resp = await asyncio.wait_for(
