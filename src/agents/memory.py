@@ -15,7 +15,7 @@ from src.db import get_user_interests
 
 logger = logging.getLogger("lens.memory")
 
-_EMBED_MODEL = "text-embedding-004"
+_EMBED_MODEL = "gemini-embedding-001"
 _TIMEOUT_S = 5.0
 
 

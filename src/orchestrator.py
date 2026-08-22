@@ -26,7 +26,7 @@ from src.contracts import (
 
 logger = logging.getLogger("lens.orchestrator")
 
-_OVERALL_TIMEOUT_S = 15.0
+_OVERALL_TIMEOUT_S = 45.0
 
 # Maps entity_type → which search tools to prioritise first.
 _ENTITY_ROUTE: dict[str, str] = {
@@ -260,12 +260,12 @@ async def _write_memory_async(
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     try:
         embed_resp = await client.aio.models.embed_content(
-            model="text-embedding-004",
+            model="gemini-embedding-001",
             contents=subject_name,
         )
         embedding: list[float] = embed_resp.embeddings[0].values  # type: ignore[index, assignment]
         approx_tokens = max(1, len(subject_name.split()))
-        cost_log.append(log_cost("memory_write_embed", "text-embedding-004", approx_tokens, 0))
+        cost_log.append(log_cost("memory_write_embed", "gemini-embedding-001", approx_tokens, 0))
         await db.write_interaction(
             user_id=user_id,
             subject_name=subject_name,

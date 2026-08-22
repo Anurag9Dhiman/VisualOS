@@ -22,7 +22,7 @@ from src.prompts import VISION_SYSTEM_PROMPT, GeoPoint
 logger = logging.getLogger("lens.vision")
 
 _MODEL = "gemini-3.5-flash"
-_TIMEOUT_S = 5.0
+_TIMEOUT_S = 12.0
 _MAX_DIMENSION = 1024
 _JPEG_QUALITY = 85
 
@@ -139,7 +139,7 @@ async def run_vision_agent(
                 config=types.GenerateContentConfig(
                     system_instruction=VISION_SYSTEM_PROMPT,
                     response_mime_type="application/json",
-                    max_output_tokens=600,
+                    max_output_tokens=1500,
                 ),
             ),
             timeout=_TIMEOUT_S,

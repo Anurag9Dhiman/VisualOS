@@ -23,6 +23,7 @@ _WINDOW_S = 60.0
 _LIMITS: dict[str, int] = {
     "gemini-3.5-flash": 15,
     "gemini-2.0-flash": 15,
+    "gemini-embedding-001": 1500,
     "text-embedding-004": 1500,
 }
 _DEFAULT_RPM = 15

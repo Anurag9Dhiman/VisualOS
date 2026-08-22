@@ -28,7 +28,7 @@ from src.tools.wikipedia_client import wikipedia_search
 logger = logging.getLogger("lens.search")
 
 _MODEL = "gemini-3.5-flash"
-_TIMEOUT_S = 5.0
+_TIMEOUT_S = 12.0
 
 
 async def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
