@@ -92,6 +92,24 @@ class MemoryResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Voice / Region
+# ---------------------------------------------------------------------------
+
+
+class ImageRegion(BaseModel):
+    """Fractional crop coordinates (0.0–1.0) for zoom queries.
+
+    Sent by the mobile client in entity_refs["region"] when the user has
+    pinched/tapped a specific area of the image before asking a voice question.
+    """
+
+    x1: float = Field(0.0, ge=0.0, le=1.0)
+    y1: float = Field(0.0, ge=0.0, le=1.0)
+    x2: float = Field(1.0, ge=0.0, le=1.0)
+    y2: float = Field(1.0, ge=0.0, le=1.0)
+
+
+# ---------------------------------------------------------------------------
 # Reasoning Agent
 # ---------------------------------------------------------------------------
 
@@ -260,3 +278,4 @@ class ScanContext(BaseModel):
     user_id: str
     scanned_at: datetime
     expires_at: datetime
+    image_b64: str = ""  # stored for voice region-zoom queries; empty when not captured
