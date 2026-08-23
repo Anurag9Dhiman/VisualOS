@@ -16,13 +16,14 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile, WebSocket
 from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 
 from src.contracts import LensInput, NormalCard, ScanContext
 from src.orchestrator import LensState, run_pipeline, stream_pipeline
 from src.session_store import create_session, get_session
+from src.ws_server import handle_voice_ws
 
 logger = logging.getLogger("lens.server")
 
@@ -53,6 +54,7 @@ def _store_session(state: LensState, user_id: str) -> ScanContext | None:
         live_facts=live_facts,
         nearby_context=nearby_context,
         user_id=user_id,
+        image_b64=state.get("image_b64", ""),
     )
 
 
@@ -145,6 +147,21 @@ async def analyze_stream(
             Path(tmp_path).unlink(missing_ok=True)
 
     return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+@app.websocket("/v1/ws")
+async def voice_ws(websocket: WebSocket) -> None:
+    """VoiceOS-compatible WebSocket endpoint.
+
+    Speaks the voice_to_agent / agent_to_voice event contract (v1) so that
+    VoiceOS (services/voice-service) can connect and forward voice queries
+    directly to Lens OS as its CollectiveOS-compatible backend.
+
+    Auth: intentionally unauthenticated — LiveKit's room token is the trust
+    boundary on the VoiceOS side. Add X-API-Key enforcement when exposing
+    beyond localhost.
+    """
+    await handle_voice_ws(websocket)
 
 
 @app.get("/session/{session_id}", dependencies=[Security(_require_api_key)])

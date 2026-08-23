@@ -27,6 +27,7 @@ def create_session(
     live_facts: list[LiveFact],
     nearby_context: str,
     user_id: str,
+    image_b64: str = "",
 ) -> ScanContext:
     """Create, store, and return a new ScanContext with a fresh session ID."""
     now = datetime.now(UTC)
@@ -43,6 +44,7 @@ def create_session(
         user_id=user_id,
         scanned_at=now,
         expires_at=now + timedelta(hours=SESSION_TTL_HOURS),
+        image_b64=image_b64,
     )
     _store[session.session_id] = session
     return session
