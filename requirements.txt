@@ -19,7 +19,7 @@ fastapi>=0.115.0
 uvicorn>=0.52.0
 fastapi>=0.141.1
 uvicorn>=0.30.0
-python-multipart>=0.0.9
+python-multipart>=0.0.32
 
 # Validation
 pydantic>=2.8.0
