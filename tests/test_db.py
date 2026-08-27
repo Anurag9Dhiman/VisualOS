@@ -272,7 +272,7 @@ def test_rrf_combines_two_rankings():
 def test_rrf_combines_conflicting_rankings():
     # Ranking A prefers 0, Ranking B prefers 1 → item appearing in both gets combined score
     fused = db_module._reciprocal_rank_fusion([[0, 1], [1, 0]])
-    scores = {idx: score for idx, score in fused}
+    scores = dict(fused)
     # Both 0 and 1 appear in both lists — item 0 is rank-1 in A and rank-2 in B; item 1 vice versa
     # RRF is symmetric here, so scores should be equal
     assert scores[0] == pytest.approx(scores[1])
@@ -281,7 +281,7 @@ def test_rrf_combines_conflicting_rankings():
 def test_rrf_item_only_in_one_list_scores_lower():
     # item 2 only in one list — should score lower than items in both
     fused = db_module._reciprocal_rank_fusion([[0, 1, 2], [0, 1]])
-    scores = {idx: score for idx, score in fused}
+    scores = dict(fused)
     assert scores[0] > scores[2]  # 0 in both lists > 2 in only one
 
 
@@ -297,7 +297,9 @@ async def test_hybrid_search_boosts_exact_name_match(tmp_db):
     embed = _make_embedding(value=0.5)
 
     await db_module.write_interaction("u1", "India Gate", "War memorial in New Delhi.", embed)
-    await db_module.write_interaction("u1", "Rajpath Boulevard", "Road leading to India Gate.", embed)
+    await db_module.write_interaction(
+        "u1", "Rajpath Boulevard", "Road leading to India Gate.", embed
+    )
 
     # With hybrid search, "India Gate" query_text should boost the exact match
     results = await db_module.search_interactions("u1", embed, query_text="India Gate", top_k=2)
@@ -326,7 +328,12 @@ async def test_hybrid_search_fallback_without_query_text(tmp_db):
 async def test_write_and_read_entity_facts(tmp_db):
     facts = [
         {"fact_key": "historical", "fact_value": "Built in 1931", "source": "Wikipedia"},
-        {"fact_key": "live", "fact_value": "Open 24 hours", "source": "Travily", "as_of": "2026-01"},
+        {
+            "fact_key": "live",
+            "fact_value": "Open 24 hours",
+            "source": "Travily",
+            "as_of": "2026-01",
+        },
     ]
     await db_module.write_entity_facts("India Gate", facts)
 
@@ -386,7 +393,9 @@ async def test_entity_facts_preserves_versions(tmp_db):
 
 @pytest.mark.asyncio
 async def test_entity_facts_live_fact_as_of_stored(tmp_db):
-    facts = [{"fact_key": "live", "fact_value": "Closed today", "source": "web", "as_of": "2026-08"}]
+    facts = [
+        {"fact_key": "live", "fact_value": "Closed today", "source": "web", "as_of": "2026-08"}
+    ]
     await db_module.write_entity_facts("Gallery", facts)
 
     results = await db_module.get_entity_facts("Gallery")
