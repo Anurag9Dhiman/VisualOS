@@ -26,6 +26,7 @@ from fastapi import (  # noqa: E402
     Form,
     HTTPException,
     Request,
+    Response,
     Security,
     UploadFile,
     WebSocket,
@@ -62,7 +63,13 @@ async def _on_shutdown() -> None:
 
 app = FastAPI(title="Lens OS API", version="0.1.0", on_shutdown=[_on_shutdown])
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
