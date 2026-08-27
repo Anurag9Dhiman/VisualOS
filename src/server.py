@@ -25,12 +25,17 @@ from fastapi import (  # noqa: E402
     File,
     Form,
     HTTPException,
+    Request,
+    Response,
     Security,
     UploadFile,
     WebSocket,
 )
 from fastapi.responses import StreamingResponse  # noqa: E402
 from fastapi.security import APIKeyHeader  # noqa: E402
+from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
 
 from src.contracts import LensInput, NormalCard, ScanContext  # noqa: E402
 from src.orchestrator import LensState, run_pipeline, stream_pipeline  # noqa: E402
@@ -38,6 +43,14 @@ from src.session_store import create_session, get_session, list_sessions  # noqa
 from src.ws_server import handle_voice_ws  # noqa: E402
 
 logger = logging.getLogger("lens.server")
+
+# ---------------------------------------------------------------------------
+# Rate limiter — per-IP, applied to /analyze endpoints only.
+# Default: 10 requests/minute. Override with LENS_RATE_LIMIT env var,
+# e.g. LENS_RATE_LIMIT="30/minute" for a paid-tier deployment.
+# ---------------------------------------------------------------------------
+_RATE_LIMIT = os.getenv("LENS_RATE_LIMIT", "10/minute")
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 
 async def _on_shutdown() -> None:
@@ -49,6 +62,14 @@ async def _on_shutdown() -> None:
 
 
 app = FastAPI(title="Lens OS API", version="0.1.0", on_shutdown=[_on_shutdown])
+app.state.limiter = limiter
+
+
+async def _rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -100,7 +121,9 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/analyze", dependencies=[Security(_require_api_key)])
+@limiter.limit(_RATE_LIMIT)
 async def analyze(
+    request: Request,
     image: UploadFile = File(..., description="JPEG, PNG, or WebP photo"),
     lat: float | None = Form(None, description="GPS latitude"),
     lng: float | None = Form(None, description="GPS longitude"),
@@ -134,7 +157,9 @@ async def analyze(
 
 
 @app.post("/analyze/stream", dependencies=[Security(_require_api_key)])
+@limiter.limit(_RATE_LIMIT)
 async def analyze_stream(
+    request: Request,
     image: UploadFile = File(..., description="JPEG, PNG, or WebP photo"),
     lat: float | None = Form(None),
     lng: float | None = Form(None),

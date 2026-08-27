@@ -43,3 +43,4 @@ pip-audit>=2.10.1
 rumps>=0.4.0; sys_platform == "darwin"
 # opencv-python>=5.0.0; sys_platform == "darwin"  # webcam capture (mac_client.py)
 # mss>=10.0.0; sys_platform == "darwin"            # screen capture (mac_client.py)
+slowapi>=0.1.9

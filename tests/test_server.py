@@ -285,6 +285,41 @@ async def test_auth_stream_requires_key(client: AsyncClient, monkeypatch: pytest
 
 
 # ---------------------------------------------------------------------------
+# Rate limiting — 429 after limit exceeded
+# ---------------------------------------------------------------------------
+
+
+async def test_rate_limit_returns_429(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LENS_RATE_LIMIT", "1/minute")
+    # Re-import server with the new env var so the limiter picks it up
+    import importlib
+
+    from httpx import ASGITransport
+    from httpx import AsyncClient as _AC
+
+    import src.server as server_mod
+
+    importlib.reload(server_mod)
+
+    _client = _AC(transport=ASGITransport(app=server_mod.app), base_url="http://test")
+    mock_state = {"response_card": _normal_card(), "errors": []}
+    with patch("src.server.run_pipeline", new_callable=AsyncMock, return_value=mock_state):
+        async with _client as c:
+            r1 = await c.post(
+                "/analyze",
+                files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+                headers={"X-Forwarded-For": "10.0.0.1"},
+            )
+            r2 = await c.post(
+                "/analyze",
+                files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
+                headers={"X-Forwarded-For": "10.0.0.1"},
+            )
+    assert r1.status_code == 200
+    assert r2.status_code == 429
+
+
+# ---------------------------------------------------------------------------
 # GET /sessions — history list
 # ---------------------------------------------------------------------------
 
