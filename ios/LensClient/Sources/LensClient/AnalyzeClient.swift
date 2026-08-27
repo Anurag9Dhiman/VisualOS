@@ -101,7 +101,8 @@ public struct AnalyzeClient: Sendable {
                             if let cardObj = obj["card"],
                                let cardData = try? JSONSerialization.data(withJSONObject: cardObj) {
                                 let card = try JSONDecoder().decode(ResponseCard.self, from: cardData)
-                                continuation.yield(.card(card))
+                                let sessionId = obj["session_id"] as? String
+                                continuation.yield(.card(card, sessionId: sessionId))
                             }
                         case "error":
                             let detail = obj["detail"] as? String ?? "Unknown error"

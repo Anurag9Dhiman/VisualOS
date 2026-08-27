@@ -14,6 +14,11 @@ struct ContentView: View {
         )
     }
 
+    private var currentSessionId: String? {
+        if case .done(_, let sid) = vm.state { return sid }
+        return nil
+    }
+
     var body: some View {
         ZStack {
             // Full-screen live viewfinder — always running so there's no black flash on reset.
@@ -41,8 +46,8 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: showingCard) {
-            if case .done(let card) = vm.state {
-                CardSheetContent(card: card, onClose: { vm.reset() })
+            if case .done(let card, let sessionId) = vm.state {
+                CardSheetContent(card: card, sessionId: sessionId, onClose: { vm.reset() })
             }
         }
     }
@@ -111,14 +116,22 @@ private struct ErrorOverlay: View {
 
 private struct CardSheetContent: View {
     let card: ResponseCard
+    let sessionId: String?
     let onClose: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                CardView(card: card)
-                    .padding()
+            VStack(spacing: 0) {
+                ScrollView {
+                    CardView(card: card)
+                        .padding()
+                }
+
+                // Voice follow-up — only when the server gave us a session_id
+                if let sid = sessionId {
+                    VoiceFollowUpView(scanSessionId: sid)
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

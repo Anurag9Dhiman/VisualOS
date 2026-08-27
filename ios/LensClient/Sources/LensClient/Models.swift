@@ -107,7 +107,7 @@ public struct FallbackCard: Decodable, Sendable {
 
 public enum StreamEvent: Sendable {
     case token(String)
-    case card(ResponseCard)
+    case card(ResponseCard, sessionId: String?)
     case error(String)
 }
 
