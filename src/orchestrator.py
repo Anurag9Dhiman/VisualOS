@@ -167,14 +167,15 @@ async def cache_check_node(state: LensState) -> LensState:
     meta = cached.get("_entity_meta")
     if meta:
         try:
+            conf = meta.get("confidence_level", "fairly_sure")
             vision_from_cache = VisionResult(
                 entity_name=meta["entity_name"],
                 entity_type=meta.get("entity_type", "unknown"),
-                confidence_level=meta.get("confidence_level", "fairly_sure"),
+                confidence_level=conf,
                 evidence=["(restored from cache)"],
                 alternatives=[],
                 failure_modes_checked=["(restored from cache)"],
-                needs_fallback=False,
+                needs_fallback=(conf == "guessing"),
             )
         except Exception as exc:
             logger.warning("Could not restore VisionResult from cache meta: %s", exc)
@@ -264,7 +265,7 @@ async def fuse_node(state: LensState) -> LensState:
         latency_ms=elapsed_ms,
         user_locale=state["input"].user_locale,
     )
-    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card, state["vision_result"]))
+    await _write_cache_async(state["_cache_key"], card, state["vision_result"])
     return {**state, "response_card": card}
 
 
