@@ -5,6 +5,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var vm = ScanViewModel()
     @StateObject private var locationManager = LocationManager()
+    @State private var showingHistory = false
 
     // Drives the result sheet without making ScanState Equatable.
     private var showingCard: Binding<Bool> {
@@ -30,7 +31,7 @@ struct ContentView: View {
             // State overlays sit on top of the camera feed.
             switch vm.state {
             case .idle:
-                AppLabel()
+                AppLabel(onHistory: { showingHistory = true })
 
             case .scanning:
                 ProcessingOverlay(label: "Identifying…")
@@ -50,19 +51,33 @@ struct ContentView: View {
                 CardSheetContent(card: card, sessionId: sessionId, onClose: { vm.reset() })
             }
         }
+        .sheet(isPresented: $showingHistory) {
+            HistoryView()
+        }
     }
 }
 
 // MARK: - Overlays
 
 private struct AppLabel: View {
+    let onHistory: () -> Void
+
     var body: some View {
         VStack {
-            Text("LENS OS")
-                .font(.caption.weight(.semibold))
-                .kerning(2)
-                .foregroundStyle(.white.opacity(0.7))
-                .padding(.top, 16)
+            HStack {
+                Text("LENS OS")
+                    .font(.caption.weight(.semibold))
+                    .kerning(2)
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Button(action: onHistory) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
             Spacer()
         }
     }

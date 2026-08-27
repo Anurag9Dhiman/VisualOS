@@ -13,6 +13,7 @@ from src.session_store import (
     clear_expired,
     create_session,
     get_session,
+    list_sessions,
 )
 
 # ---------------------------------------------------------------------------
@@ -161,3 +162,54 @@ def test_clear_expired_returns_zero_when_all_active():
     _make_session()
     _make_session()
     assert clear_expired() == 0
+
+
+# ---------------------------------------------------------------------------
+# list_sessions
+# ---------------------------------------------------------------------------
+
+
+def test_list_sessions_returns_user_sessions():
+    _make_session(user_id="alice")
+    _make_session(user_id="alice")
+    _make_session(user_id="bob")
+    results = list_sessions("alice")
+    assert len(results) == 2
+    assert all(s.user_id == "alice" for s in results)
+
+
+def test_list_sessions_newest_first():
+    import time
+
+    s1 = _make_session(entity_name="First")
+    time.sleep(0.01)
+    s2 = _make_session(entity_name="Second")
+    results = list_sessions("user-42")
+    assert results[0].session_id == s2.session_id
+    assert results[1].session_id == s1.session_id
+
+
+def test_list_sessions_excludes_expired():
+    active = _make_session()
+    expired = _make_session(entity_name="Old")
+
+    from src import session_store
+
+    session_store._store[expired.session_id] = expired.model_copy(
+        update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)}
+    )
+    results = list_sessions("user-42")
+    assert len(results) == 1
+    assert results[0].session_id == active.session_id
+
+
+def test_list_sessions_respects_limit():
+    for i in range(5):
+        _make_session(entity_name=f"Scan {i}")
+    results = list_sessions("user-42", limit=3)
+    assert len(results) == 3
+
+
+def test_list_sessions_empty_for_unknown_user():
+    _make_session(user_id="alice")
+    assert list_sessions("nobody") == []
