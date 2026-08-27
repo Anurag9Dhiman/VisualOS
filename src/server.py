@@ -39,7 +39,16 @@ from src.ws_server import handle_voice_ws  # noqa: E402
 
 logger = logging.getLogger("lens.server")
 
-app = FastAPI(title="Lens OS API", version="0.1.0")
+
+async def _on_shutdown() -> None:
+    if os.environ.get("DATABASE_URL"):
+        from src.db_postgres import close as pg_close
+
+        await pg_close()
+        logger.info("PostgreSQL pool closed")
+
+
+app = FastAPI(title="Lens OS API", version="0.1.0", on_shutdown=[_on_shutdown])
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)

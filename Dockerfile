@@ -1,20 +1,19 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# Install deps before copying source — layer is cached unless requirements.txt changes
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# System deps for Pillow and psycopg2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy only the source package (tests, inspector, and dev tools stay out)
+# Install Python deps first (layer-cache friendly)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir psycopg2-binary asyncpg
+
 COPY src/ ./src/
 
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-
 EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
 CMD ["uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

@@ -1,19 +1,42 @@
 services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lens_memory
+      POSTGRES_USER: lens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lens_dev_password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lens -d lens_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
   api:
     build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://lens:${POSTGRES_PASSWORD:-lens_dev_password}@db:5432/lens_memory
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LENS_API_KEY: ${LENS_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-lens-os-phase1}
     ports:
       - "8000:8000"
-    env_file: .env                        # GOOGLE_API_KEY, TAVILY_API_KEY, etc.
-    volumes:
-      - db-data:/app/lens_memory.db       # SQLite persists across restarts
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
 
 volumes:
-  db-data:
+  pgdata:
