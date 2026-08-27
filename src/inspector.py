@@ -291,21 +291,25 @@ def main() -> None:
     # Generate a session ID (mirrors server._store_session logic)
     session_id: str | None = None
     if vision is not None and card is not None:
+        import asyncio
+
         from src.contracts import NormalCard as _NCard
         from src.session_store import create_session
 
         card_body = card.body if isinstance(card, _NCard) else card.observation
-        ctx = create_session(
-            entity_name=vision.entity_name,
-            entity_type=vision.entity_type,
-            confidence_level=vision.confidence_level,
-            card_headline=card.headline,
-            card_body=card_body,
-            historical_facts=search.historical_facts if search else [],
-            live_facts=search.live_facts if search else [],
-            nearby_context=search.nearby_context if search else "",
-            user_id=user_id,
-            image_b64=state.get("image_b64", ""),
+        ctx = asyncio.run(
+            create_session(
+                entity_name=vision.entity_name,
+                entity_type=vision.entity_type,
+                confidence_level=vision.confidence_level,
+                card_headline=card.headline,
+                card_body=card_body,
+                historical_facts=search.historical_facts if search else [],
+                live_facts=search.live_facts if search else [],
+                nearby_context=search.nearby_context if search else "",
+                user_id=user_id,
+                image_b64=state.get("image_b64", ""),
+            )
         )
         session_id = ctx.session_id
 

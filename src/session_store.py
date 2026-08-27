@@ -11,11 +11,11 @@ conversation in the original scan output.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.contracts import HistoricalFact, LiveFact, ScanContext
 
@@ -31,10 +31,10 @@ _store: dict[str, ScanContext] = {}
 # Optional Redis backend
 # ---------------------------------------------------------------------------
 
-_redis: object | None = None  # redis.asyncio.Redis when REDIS_URL is set
+_redis: Any = None  # redis.asyncio.Redis when REDIS_URL is set
 
 
-def _get_redis() -> object | None:
+def _get_redis() -> Any:
     global _redis
     if _redis is not None:
         return _redis
@@ -43,10 +43,13 @@ def _get_redis() -> object | None:
         return None
     try:
         import redis.asyncio as aioredis
+
         _redis = aioredis.from_url(redis_url, decode_responses=True)
         logger.info("Session store: Redis backend active at %s", redis_url)
     except ImportError:
-        logger.warning("REDIS_URL is set but redis package is not installed — using in-memory store")
+        logger.warning(
+            "REDIS_URL is set but redis package is not installed — using in-memory store"
+        )
     return _redis
 
 
@@ -56,7 +59,7 @@ async def _redis_set(session: ScanContext) -> None:
         return
     key = _REDIS_PREFIX + session.session_id
     payload = session.model_dump_json()
-    await r.set(key, payload, ex=_SESSION_TTL_SECS)  # type: ignore[union-attr]
+    await r.set(key, payload, ex=_SESSION_TTL_SECS)
 
 
 async def _redis_get(session_id: str) -> ScanContext | None:
@@ -64,7 +67,7 @@ async def _redis_get(session_id: str) -> ScanContext | None:
     if r is None:
         return None
     key = _REDIS_PREFIX + session_id
-    raw = await r.get(key)  # type: ignore[union-attr]
+    raw = await r.get(key)
     if raw is None:
         return None
     try:
@@ -80,8 +83,8 @@ async def _redis_scan_user(user_id: str) -> list[ScanContext]:
     pattern = _REDIS_PREFIX + "*"
     results: list[ScanContext] = []
     now = datetime.now(UTC)
-    async for key in r.scan_iter(pattern):  # type: ignore[union-attr]
-        raw = await r.get(key)  # type: ignore[union-attr]
+    async for key in r.scan_iter(pattern):
+        raw = await r.get(key)
         if raw is None:
             continue
         try:
