@@ -64,10 +64,7 @@ def get_session(session_id: str) -> ScanContext | None:
 def list_sessions(user_id: str, limit: int = 20) -> list[ScanContext]:
     """Return up to `limit` non-expired sessions for a user, newest first."""
     now = datetime.now(UTC)
-    results = [
-        ctx for ctx in _store.values()
-        if ctx.user_id == user_id and now <= ctx.expires_at
-    ]
+    results = [ctx for ctx in _store.values() if ctx.user_id == user_id and now <= ctx.expires_at]
     results.sort(key=lambda c: c.scanned_at, reverse=True)
     return results[:limit]
 

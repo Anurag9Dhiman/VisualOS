@@ -294,14 +294,26 @@ async def test_list_sessions_returns_user_sessions(client: AsyncClient):
 
     _clear_all()
     create_session(
-        entity_name="India Gate", entity_type="monument", confidence_level="certain",
-        card_headline="India Gate", card_body="War memorial.",
-        historical_facts=[], live_facts=[], nearby_context="", user_id="hist-user",
+        entity_name="India Gate",
+        entity_type="monument",
+        confidence_level="certain",
+        card_headline="India Gate",
+        card_body="War memorial.",
+        historical_facts=[],
+        live_facts=[],
+        nearby_context="",
+        user_id="hist-user",
     )
     create_session(
-        entity_name="Humayun's Tomb", entity_type="monument", confidence_level="certain",
-        card_headline="Humayun's Tomb", card_body="Mughal mausoleum.",
-        historical_facts=[], live_facts=[], nearby_context="", user_id="hist-user",
+        entity_name="Humayun's Tomb",
+        entity_type="monument",
+        confidence_level="certain",
+        card_headline="Humayun's Tomb",
+        card_body="Mughal mausoleum.",
+        historical_facts=[],
+        live_facts=[],
+        nearby_context="",
+        user_id="hist-user",
     )
     async with client as c:
         r = await c.get("/sessions", params={"user_id": "hist-user"})
@@ -317,10 +329,16 @@ async def test_list_sessions_excludes_image_b64(client: AsyncClient):
 
     _clear_all()
     create_session(
-        entity_name="Gateway of India", entity_type="monument", confidence_level="certain",
-        card_headline="Gateway of India", card_body="Arch monument.",
-        historical_facts=[], live_facts=[], nearby_context="",
-        user_id="img-user", image_b64="LARGEBASE64DATA",
+        entity_name="Gateway of India",
+        entity_type="monument",
+        confidence_level="certain",
+        card_headline="Gateway of India",
+        card_body="Arch monument.",
+        historical_facts=[],
+        live_facts=[],
+        nearby_context="",
+        user_id="img-user",
+        image_b64="LARGEBASE64DATA",
     )
     async with client as c:
         r = await c.get("/sessions", params={"user_id": "img-user"})
