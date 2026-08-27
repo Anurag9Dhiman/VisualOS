@@ -309,3 +309,407 @@ async def test_ws_query_happy_path(monkeypatch):
     speak_event = next(e for e in sent_events if e["type"] == "speak")
     assert "1931" in speak_event["text"]
     assert sent_events[-1]["outcome"] == "completed"
+
+
+@pytest.mark.asyncio()
+async def test_ws_query_with_region_sends_progress(monkeypatch):
+    """WS sends a region-specific progress message when entity_refs contains a region."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.session_store import _clear_all, _store
+
+    _clear_all()
+    ctx = _make_scan_ctx(with_image=True)
+    _store[ctx.session_id] = ctx
+
+    sent_events: list[dict] = []
+    mock_resp = _mock_genai_response("The inscription reads India Gate.")
+
+    from src.ws_server import _handle_query
+
+    class FakeWS:
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+    raw = {
+        "type": "user_utterance",
+        "text": "What is written there?",
+        "entity_refs": {
+            "scan_session_id": ctx.session_id,
+            "region": {"x1": 0.0, "y1": 0.0, "x2": 0.5, "y2": 0.5},
+        },
+    }
+
+    with (
+        patch("src.voice_handler.genai.Client") as MockClient,
+        patch("src.voice_handler.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        await _handle_query(FakeWS(), raw, "ws-abc", "user-1")  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "ack" in types_sent
+    assert "progress" in types_sent
+    progress = next(e for e in sent_events if e["type"] == "progress")
+    assert "Zooming" in progress["text"]
+
+
+@pytest.mark.asyncio()
+async def test_ws_query_with_invalid_region_is_ignored(monkeypatch):
+    """Malformed region (non-numeric x1) is caught and silently ignored."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.session_store import _clear_all, _store
+
+    _clear_all()
+    ctx = _make_scan_ctx()
+    _store[ctx.session_id] = ctx
+
+    sent_events: list[dict] = []
+    mock_resp = _mock_genai_response("Built in 1931.")
+
+    from src.ws_server import _handle_query
+
+    class FakeWS:
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+    raw = {
+        "type": "user_utterance",
+        "text": "When was it built?",
+        "entity_refs": {
+            "scan_session_id": ctx.session_id,
+            # x1 violates ge=0.0 constraint → Pydantic ValidationError → except branch
+            "region": {"x1": -99.0, "y1": 0.0, "x2": 1.0, "y2": 1.0},
+        },
+    }
+
+    with (
+        patch("src.voice_handler.genai.Client") as MockClient,
+        patch("src.voice_handler.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        await _handle_query(FakeWS(), raw, "ws-abc", "user-1")  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "speak" in types_sent
+    assert "done" in types_sent
+
+
+@pytest.mark.asyncio()
+async def test_ws_query_voice_handler_timeout_returns_error(monkeypatch):
+    """WS sends a recoverable error event when voice_handler times out."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.session_store import _clear_all, _store
+
+    _clear_all()
+    ctx = _make_scan_ctx()
+    _store[ctx.session_id] = ctx
+
+    sent_events: list[dict] = []
+
+    from src.ws_server import _handle_query
+
+    class FakeWS:
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+    raw = {
+        "type": "user_utterance",
+        "text": "Tell me everything.",
+        "entity_refs": {"scan_session_id": ctx.session_id},
+    }
+
+    with (
+        patch("src.voice_handler.genai.Client") as MockClient,
+        patch("src.voice_handler.rate_limiter.acquire", new=AsyncMock()),
+        patch("src.ws_server.answer_voice_query", side_effect=TimeoutError),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(side_effect=TimeoutError)
+        await _handle_query(FakeWS(), raw, "ws-abc", "user-1")  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "error" in types_sent
+    err = next(e for e in sent_events if e["type"] == "error")
+    assert err["recoverable"] is True
+
+
+@pytest.mark.asyncio()
+async def test_ws_query_voice_handler_exception_returns_error(monkeypatch):
+    """WS sends a recoverable error event when voice_handler raises unexpectedly."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.session_store import _clear_all, _store
+
+    _clear_all()
+    ctx = _make_scan_ctx()
+    _store[ctx.session_id] = ctx
+
+    sent_events: list[dict] = []
+
+    from src.ws_server import _handle_query
+
+    class FakeWS:
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+    raw = {
+        "type": "user_utterance",
+        "text": "Who built this?",
+        "entity_refs": {"scan_session_id": ctx.session_id},
+    }
+
+    with patch("src.ws_server.answer_voice_query", side_effect=RuntimeError("boom")):
+        await _handle_query(FakeWS(), raw, "ws-abc", "user-1")  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "error" in types_sent
+    err = next(e for e in sent_events if e["type"] == "error")
+    assert err["recoverable"] is True
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_full_loop(monkeypatch):
+    """Full WS session: session_start → user_utterance → session_end closes cleanly."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    from src.session_store import _clear_all, _store
+
+    _clear_all()
+    ctx = _make_scan_ctx()
+    _store[ctx.session_id] = ctx
+
+    messages = [
+        {"type": "session_start", "session_id": "ws-loop-test", "user_id": "u1"},
+        {
+            "type": "user_utterance",
+            "text": "who designed it?",
+            "entity_refs": {"scan_session_id": ctx.session_id},
+        },
+        {"type": "session_end"},
+    ]
+    msg_iter = iter(messages)
+    sent_events: list[dict] = []
+    closed = []
+
+    mock_resp = _mock_genai_response("Edwin Lutyens designed India Gate.")
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            return next(msg_iter)
+
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+        async def close(self, code: int = 1000) -> None:
+            closed.append(code)
+
+    from src.ws_server import handle_voice_ws
+
+    with (
+        patch("src.voice_handler.genai.Client") as MockClient,
+        patch("src.voice_handler.rate_limiter.acquire", new=AsyncMock()),
+    ):
+        MockClient.return_value.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "speak" in types_sent
+    assert "done" in types_sent
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_interrupt_event():
+    """WS handles 'interrupt' event by sending ack and continuing."""
+    messages = [
+        {"type": "session_start", "session_id": "ws-int", "user_id": "u1"},
+        {"type": "interrupt"},
+        {"type": "session_end"},
+    ]
+    msg_iter = iter(messages)
+    sent_events: list[dict] = []
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            return next(msg_iter)
+
+        async def send_text(self, text: str) -> None:
+            sent_events.append(json.loads(text))
+
+        async def close(self, code: int = 1000) -> None:
+            pass
+
+    from src.ws_server import handle_voice_ws
+
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+
+    types_sent = [e["type"] for e in sent_events]
+    assert "ack" in types_sent
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_unknown_event_is_ignored():
+    """Unknown event types are logged but do not crash the session."""
+    messages = [
+        {"type": "session_start", "session_id": "ws-unk", "user_id": "u1"},
+        {"type": "totally_unknown_event"},
+        {"type": "session_end"},
+    ]
+    msg_iter = iter(messages)
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            return next(msg_iter)
+
+        async def send_text(self, text: str) -> None:
+            pass
+
+        async def close(self, code: int = 1000) -> None:
+            pass
+
+    from src.ws_server import handle_voice_ws
+
+    # Should complete without raising
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_receive_exception_exits_cleanly():
+    """An exception from receive_json exits the loop without propagating."""
+    call_count = 0
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"type": "session_start", "session_id": "ws-exc", "user_id": "u1"}
+            raise RuntimeError("connection dropped")
+
+        async def send_text(self, text: str) -> None:
+            pass
+
+        async def close(self, code: int = 1000) -> None:
+            pass
+
+    from src.ws_server import handle_voice_ws
+
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+    # If we get here the exception was caught and the loop exited cleanly
+
+
+@pytest.mark.asyncio()
+async def test_send_swallows_websocket_disconnect():
+    """_send silently swallows WebSocketDisconnect so the caller doesn't crash."""
+    from fastapi import WebSocketDisconnect
+
+    from src.ws_server import _send
+
+    class FakeWS:
+        async def send_text(self, text: str) -> None:
+            raise WebSocketDisconnect(code=1001)
+
+    # Should not raise
+    await _send(FakeWS(), {"type": "speak", "text": "hello"})  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_first_message_timeout_exits_cleanly():
+    """If the first message times out, handle_voice_ws returns without crashing."""
+    from src.ws_server import handle_voice_ws
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            raise TimeoutError("no first message")
+
+        async def send_text(self, text: str) -> None:
+            pass
+
+        async def close(self, code: int = 1000) -> None:
+            pass
+
+    # Should return cleanly — no exception propagated
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_idle_timeout_exits_loop():
+    """A TimeoutError from receive_json in the message loop closes the session."""
+    call_count = 0
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"type": "session_start", "session_id": "ws-idle", "user_id": "u1"}
+            raise TimeoutError("idle timeout")
+
+        async def send_text(self, text: str) -> None:
+            pass
+
+        async def close(self, code: int = 1000) -> None:
+            pass
+
+    from src.ws_server import handle_voice_ws
+
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+    assert call_count == 2  # first message + timeout on second
+
+
+@pytest.mark.asyncio()
+async def test_handle_voice_ws_close_exception_is_swallowed():
+    """If websocket.close() raises, handle_voice_ws exits without propagating."""
+    messages = [
+        {"type": "session_start", "session_id": "ws-close-exc", "user_id": "u1"},
+        {"type": "session_end"},
+    ]
+    msg_iter = iter(messages)
+
+    class FakeWS:
+        async def accept(self) -> None:
+            pass
+
+        async def receive_json(self) -> dict:
+            return next(msg_iter)
+
+        async def send_text(self, text: str) -> None:
+            pass
+
+        async def close(self, code: int = 1000) -> None:
+            raise RuntimeError("connection already closed")
+
+    from src.ws_server import handle_voice_ws
+
+    # Should complete without raising despite close() throwing
+    await handle_voice_ws(FakeWS())  # type: ignore[arg-type]
+
+
+def test_crop_image_large_input_is_resized():
+    """_crop_image thumbnails large crops to fit within 1024px (covers line 75)."""
+    buf = io.BytesIO()
+    # 2000×2000 image — crop covers the full image, so result is 2000×2000 → must thumbnail
+    Image.new("RGB", (2000, 2000), color=(255, 0, 0)).save(buf, format="JPEG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+
+    from src.voice_handler import _crop_image
+
+    region = ImageRegion(x1=0.0, y1=0.0, x2=1.0, y2=1.0)
+    crop_bytes = _crop_image(b64, region)
+
+    img = Image.open(io.BytesIO(crop_bytes))
+    assert max(img.size) <= 1024, "large crop should be thumbnailed to ≤1024px"

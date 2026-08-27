@@ -160,7 +160,26 @@ async def cache_check_node(state: LensState) -> LensState:
     else:
         card = NormalCard(**{k: v for k, v in cached.items() if k in NormalCard.model_fields})
     logger.info("Returning cached card — skipping all agents")
-    return {**state, "response_card": card}
+
+    # Restore a minimal VisionResult from cached entity metadata so that
+    # _store_session in server.py can create a voice session on cache hits.
+    vision_from_cache: VisionResult | None = None
+    meta = cached.get("_entity_meta")
+    if meta:
+        try:
+            vision_from_cache = VisionResult(
+                entity_name=meta["entity_name"],
+                entity_type=meta.get("entity_type", "unknown"),
+                confidence_level=meta.get("confidence_level", "fairly_sure"),
+                evidence=["(restored from cache)"],
+                alternatives=[],
+                failure_modes_checked=["(restored from cache)"],
+                needs_fallback=False,
+            )
+        except Exception as exc:
+            logger.warning("Could not restore VisionResult from cache meta: %s", exc)
+
+    return {**state, "response_card": card, "vision_result": vision_from_cache}
 
 
 def _should_run_agents(state: LensState) -> str:
@@ -246,15 +265,24 @@ async def fuse_node(state: LensState) -> LensState:
         latency_ms=elapsed_ms,
         user_locale=state["input"].user_locale,
     )
-    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card))
+    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card, state["vision_result"]))
     return {**state, "response_card": card}
 
 
-async def _write_cache_async(cache_key: str, card: ResponseCard) -> None:
+async def _write_cache_async(
+    cache_key: str, card: ResponseCard, vision: VisionResult | None
+) -> None:
     from src.cache import cache_set
 
+    entity_dict: dict | None = None
+    if vision is not None:
+        entity_dict = {
+            "entity_name": vision.entity_name,
+            "entity_type": vision.entity_type,
+            "confidence_level": vision.confidence_level,
+        }
     try:
-        await cache_set(cache_key, card.model_dump())
+        await cache_set(cache_key, card.model_dump(), entity_dict)
     except Exception as exc:
         logger.warning("cache_set failed: %s", exc)
 
@@ -265,6 +293,7 @@ async def write_memory_node(state: LensState) -> LensState:
     if not vision or not isinstance(card, NormalCard):
         return state
 
+    search = state.get("search_result")
     asyncio.ensure_future(
         _write_memory_async(
             user_id=state["input"].user_id,
@@ -272,6 +301,7 @@ async def write_memory_node(state: LensState) -> LensState:
             summary=card.body,
             cost_log=state["cost_log"],
             entity_type=vision.entity_type,
+            search_result=search,
         )
     )
     return state
@@ -283,12 +313,13 @@ async def _write_memory_async(
     summary: str,
     cost_log: list[CostEntry],
     entity_type: str = "unknown",
+    search_result=None,
 ) -> None:
     import os
 
     from google import genai
 
-    from src import db
+    from src import db, memory_l1
     from src.cost_logger import log_cost
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -300,6 +331,8 @@ async def _write_memory_async(
         embedding: list[float] = embed_resp.embeddings[0].values  # type: ignore[index, assignment]
         approx_tokens = max(1, len(subject_name.split()))
         cost_log.append(log_cost("memory_write_embed", "gemini-embedding-001", approx_tokens, 0))
+
+        # Layer 2: write interaction with embedding
         await db.write_interaction(
             user_id=user_id,
             subject_name=subject_name,
@@ -307,6 +340,27 @@ async def _write_memory_async(
             embedding=embedding,
         )
         await db.upsert_interest(user_id, entity_type)
+
+        # Layer 1: record in in-context rolling window
+        memory_l1.record_scan(user_id, subject_name, summary)
+
+        # Layer 3: persist facts from Search result
+        if search_result is not None:
+            facts: list[dict] = []
+            for hf in search_result.historical_facts or []:
+                facts.append({"fact_key": "historical", "fact_value": hf.fact, "source": hf.source})
+            for lf in search_result.live_facts or []:
+                facts.append(
+                    {
+                        "fact_key": "live",
+                        "fact_value": lf.fact,
+                        "source": lf.source,
+                        "as_of": lf.as_of,
+                    }
+                )
+            if facts:
+                await db.write_entity_facts(subject_name, facts)
+
     except Exception as exc:
         logger.warning("write_memory async failed: %s", exc)
 

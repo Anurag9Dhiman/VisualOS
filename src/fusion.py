@@ -29,7 +29,7 @@ from src.prompts import FUSION_SYSTEM_PROMPT, build_fusion_user_message
 
 logger = logging.getLogger("lens.fusion")
 
-_MODEL = "gemini-3.5-flash"
+_MODEL = "gemini-3.6-flash"
 _TIMEOUT_S = 12.0
 
 

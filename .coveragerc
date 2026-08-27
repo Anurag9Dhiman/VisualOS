@@ -3,6 +3,7 @@ source = src
 omit =
     src/inspector.py
     src/main.py
+    src/mac_client.py
 
 [report]
 show_missing = true

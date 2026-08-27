@@ -29,7 +29,7 @@ from src.cost_logger import log_cost
 
 logger = logging.getLogger("lens.voice")
 
-_MODEL = "gemini-3.5-flash"
+_MODEL = "gemini-3.6-flash"
 _TIMEOUT_S = 12.0
 
 _VOICE_SYSTEM_PROMPT = """You are a voice assistant for Lens OS. The user is standing in front of an entity that has already been identified and analysed. Your job is to answer follow-up questions concisely.

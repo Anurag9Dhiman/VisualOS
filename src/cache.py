@@ -30,12 +30,18 @@ def init_cache(db_path: Path) -> None:
             CREATE TABLE IF NOT EXISTS response_cache (
                 cache_key   TEXT PRIMARY KEY,
                 card_json   TEXT NOT NULL,
+                entity_json TEXT,
                 created_at  TEXT NOT NULL,
                 expires_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_cache_expires ON response_cache(expires_at);
         """)
-        conn.commit()
+        # Migrate existing DBs that don't have entity_json yet
+        try:
+            conn.execute("ALTER TABLE response_cache ADD COLUMN entity_json TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
     finally:
         conn.close()
 
@@ -49,7 +55,13 @@ def make_cache_key(image_bytes: bytes, lat: float | None, lng: float | None) -> 
 
 
 async def cache_get(cache_key: str) -> dict | None:
-    """Return cached card dict or None on miss/expiry."""
+    """Return cached payload or None on miss/expiry.
+
+    Returns a dict with the card fields plus an ``_entity_meta`` key containing
+    the entity name/type/confidence stored at write time — used by
+    ``cache_check_node`` to reconstruct a minimal ``VisionResult`` so that
+    session creation still works on cache hits.
+    """
 
     def _get() -> dict | None:
         if _DB_PATH is None:
@@ -59,10 +71,16 @@ async def cache_get(cache_key: str) -> dict | None:
         try:
             now = datetime.now(UTC).isoformat()
             row = conn.execute(
-                "SELECT card_json FROM response_cache WHERE cache_key = ? AND expires_at > ?",
+                "SELECT card_json, entity_json FROM response_cache "
+                "WHERE cache_key = ? AND expires_at > ?",
                 (cache_key, now),
             ).fetchone()
-            return json.loads(row["card_json"]) if row else None
+            if row is None:
+                return None
+            data = json.loads(row["card_json"])
+            if row["entity_json"]:
+                data["_entity_meta"] = json.loads(row["entity_json"])
+            return data
         finally:
             conn.close()
 
@@ -74,8 +92,13 @@ async def cache_get(cache_key: str) -> dict | None:
     return result
 
 
-async def cache_set(cache_key: str, card_dict: dict) -> None:
-    """Store a card dict with a 24-hour TTL."""
+async def cache_set(cache_key: str, card_dict: dict, entity_dict: dict | None = None) -> None:
+    """Store a card dict with a 24-hour TTL.
+
+    ``entity_dict`` should contain at least ``entity_name``, ``entity_type``,
+    and ``confidence_level`` so that a session can be created on subsequent
+    cache hits without re-running Vision.
+    """
 
     def _set() -> None:
         if _DB_PATH is None:
@@ -85,9 +108,16 @@ async def cache_set(cache_key: str, card_dict: dict) -> None:
         conn = sqlite3.connect(_DB_PATH)
         try:
             conn.execute(
-                "INSERT OR REPLACE INTO response_cache (cache_key, card_json, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?)",
-                (cache_key, json.dumps(card_dict), now.isoformat(), expires.isoformat()),
+                "INSERT OR REPLACE INTO response_cache "
+                "(cache_key, card_json, entity_json, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    cache_key,
+                    json.dumps(card_dict),
+                    json.dumps(entity_dict) if entity_dict else None,
+                    now.isoformat(),
+                    expires.isoformat(),
+                ),
             )
             conn.commit()
         finally:

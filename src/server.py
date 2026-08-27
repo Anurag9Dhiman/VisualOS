@@ -16,14 +16,26 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile, WebSocket
-from fastapi.responses import StreamingResponse
-from fastapi.security import APIKeyHeader
+from dotenv import load_dotenv
 
-from src.contracts import LensInput, NormalCard, ScanContext
-from src.orchestrator import LensState, run_pipeline, stream_pipeline
-from src.session_store import create_session, get_session
-from src.ws_server import handle_voice_ws
+load_dotenv()  # must run before importing src modules that read os.environ at import time
+
+from fastapi import (  # noqa: E402
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Security,
+    UploadFile,
+    WebSocket,
+)
+from fastapi.responses import StreamingResponse  # noqa: E402
+from fastapi.security import APIKeyHeader  # noqa: E402
+
+from src.contracts import LensInput, NormalCard, ScanContext  # noqa: E402
+from src.orchestrator import LensState, run_pipeline, stream_pipeline  # noqa: E402
+from src.session_store import create_session, get_session  # noqa: E402
+from src.ws_server import handle_voice_ws  # noqa: E402
 
 logger = logging.getLogger("lens.server")
 

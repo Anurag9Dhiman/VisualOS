@@ -27,7 +27,7 @@ from src.tools.wikipedia_client import wikipedia_search
 
 logger = logging.getLogger("lens.search")
 
-_MODEL = "gemini-3.5-flash"
+_MODEL = "gemini-3.6-flash"
 _TIMEOUT_S = 12.0
 
 

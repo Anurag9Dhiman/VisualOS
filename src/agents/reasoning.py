@@ -17,7 +17,7 @@ from src.prompts import REASONING_SYSTEM_PROMPT, GeoPoint, build_reasoning_user_
 
 logger = logging.getLogger("lens.reasoning")
 
-_MODEL = "gemini-3.5-flash"
+_MODEL = "gemini-3.6-flash"
 _TIMEOUT_S = 12.0
 
 
@@ -76,8 +76,7 @@ async def run_reasoning_agent(
             contents=user_msg,
             config=types.GenerateContentConfig(
                 system_instruction=REASONING_SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                max_output_tokens=600,
+                max_output_tokens=1200,
             ),
         ),
         timeout=_TIMEOUT_S,
@@ -93,8 +92,12 @@ async def run_reasoning_agent(
         )
     )
 
+    raw = resp.text or ""
+    # Strip markdown code fences if the model wraps output in ```json ... ```
+    if "```" in raw:
+        raw = raw.split("```")[-2].lstrip("json").strip() if raw.count("```") >= 2 else raw
     try:
-        data = json.loads(resp.text or "{}")
+        data = json.loads(raw)
     except json.JSONDecodeError:
         logger.warning("Reasoning agent returned invalid JSON — using defaults")
         data = {}
