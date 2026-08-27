@@ -34,7 +34,7 @@ from fastapi.security import APIKeyHeader  # noqa: E402
 
 from src.contracts import LensInput, NormalCard, ScanContext  # noqa: E402
 from src.orchestrator import LensState, run_pipeline, stream_pipeline  # noqa: E402
-from src.session_store import create_session, get_session  # noqa: E402
+from src.session_store import create_session, get_session, list_sessions  # noqa: E402
 from src.ws_server import handle_voice_ws  # noqa: E402
 
 logger = logging.getLogger("lens.server")
@@ -183,6 +183,19 @@ async def voice_ws(websocket: WebSocket) -> None:
     beyond localhost.
     """
     await handle_voice_ws(websocket)
+
+
+@app.get("/sessions", dependencies=[Security(_require_api_key)])
+async def list_scan_sessions(
+    user_id: str = "anon",
+    limit: int = 20,
+) -> list[dict]:
+    """Return up to `limit` recent sessions for a user, newest first.
+
+    Excludes image_b64 from each entry to keep response size small.
+    """
+    sessions = list_sessions(user_id, limit=min(limit, 50))
+    return [s.model_dump(mode="json", exclude={"image_b64"}) for s in sessions]
 
 
 @app.get("/session/{session_id}", dependencies=[Security(_require_api_key)])

@@ -285,6 +285,58 @@ async def test_auth_stream_requires_key(client: AsyncClient, monkeypatch: pytest
 
 
 # ---------------------------------------------------------------------------
+# GET /sessions — history list
+# ---------------------------------------------------------------------------
+
+
+async def test_list_sessions_returns_user_sessions(client: AsyncClient):
+    from src.session_store import _clear_all, create_session
+
+    _clear_all()
+    create_session(
+        entity_name="India Gate", entity_type="monument", confidence_level="certain",
+        card_headline="India Gate", card_body="War memorial.",
+        historical_facts=[], live_facts=[], nearby_context="", user_id="hist-user",
+    )
+    create_session(
+        entity_name="Humayun's Tomb", entity_type="monument", confidence_level="certain",
+        card_headline="Humayun's Tomb", card_body="Mughal mausoleum.",
+        historical_facts=[], live_facts=[], nearby_context="", user_id="hist-user",
+    )
+    async with client as c:
+        r = await c.get("/sessions", params={"user_id": "hist-user"})
+    assert r.status_code == 200
+    items = r.json()
+    assert len(items) == 2
+    assert all(item["user_id"] == "hist-user" for item in items)
+    _clear_all()
+
+
+async def test_list_sessions_excludes_image_b64(client: AsyncClient):
+    from src.session_store import _clear_all, create_session
+
+    _clear_all()
+    create_session(
+        entity_name="Gateway of India", entity_type="monument", confidence_level="certain",
+        card_headline="Gateway of India", card_body="Arch monument.",
+        historical_facts=[], live_facts=[], nearby_context="",
+        user_id="img-user", image_b64="LARGEBASE64DATA",
+    )
+    async with client as c:
+        r = await c.get("/sessions", params={"user_id": "img-user"})
+    assert r.status_code == 200
+    assert "image_b64" not in r.json()[0]
+    _clear_all()
+
+
+async def test_list_sessions_empty_for_unknown_user(client: AsyncClient):
+    async with client as c:
+        r = await c.get("/sessions", params={"user_id": "nobody-xyz"})
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+# ---------------------------------------------------------------------------
 # GET /session/{session_id}
 # ---------------------------------------------------------------------------
 
