@@ -110,18 +110,41 @@ def _show_memory(memory) -> None:
         st.info("Memory agent returned nothing.")
         return
     st.markdown(f"User: `{memory.user_id}`")
+
+    # Layer 1 — in-context recent window
+    st.markdown("#### Layer 1 — In-context recent scans")
+    if memory.recent_context:
+        st.info(memory.recent_context)
+    else:
+        st.caption("No recent scans in this session (L1 resets on server restart).")
+
+    # Layer 2 — vector hits
+    st.markdown("#### Layer 2 — Hybrid retrieval hits (BM25 + semantic)")
     if memory.user_interests_snapshot:
         st.markdown("**Interest snapshot**")
         for k, v in sorted(memory.user_interests_snapshot.items(), key=lambda x: -x[1])[:5]:
             st.markdown(f"- `{k}`: {v:.2f}")
     if memory.hits:
-        st.markdown(f"**{len(memory.hits)} memory hit(s)**")
+        st.markdown(f"**{len(memory.hits)} hit(s) above 0.75 similarity**")
         for h in memory.hits:
             st.markdown(
-                f"- **{h.subject_name}** (score {h.similarity_score:.2f}): {h.summary[:80]}…"
+                f"- **{h.subject_name}** (semantic {h.similarity_score:.2f}): {h.summary[:80]}…"
             )
     else:
         st.markdown("No prior interactions found for this user.")
+
+    # Layer 3 — persisted entity facts
+    st.markdown("#### Layer 3 — Persisted entity facts")
+    if memory.entity_facts:
+        st.markdown(f"**{len(memory.entity_facts)} stored fact(s)**")
+        for f in memory.entity_facts[:8]:
+            tag = f.get("as_of", "")
+            source = f.get("source", "")
+            label = f"*{f['fact_key']}*" if f.get("fact_key") else ""
+            meta = " · ".join(filter(None, [source, f"as of {tag}" if tag else ""]))
+            st.markdown(f"- {label} {f['fact_value']} *(  {meta})*")
+    else:
+        st.caption("No stored facts for this entity yet — will populate after first full scan.")
 
 
 def _show_search(search) -> None:
@@ -152,8 +175,10 @@ def _show_search(search) -> None:
         st.markdown(f"**Nearby:** {search.nearby_context}")
 
 
-def _show_card(card) -> None:
+def _show_card(card, session_id: str | None = None, from_cache: bool = False) -> None:
     card_dict = card.model_dump()
+    if from_cache:
+        st.caption("⚡ Served from cache — agents skipped.")
     if card_dict.get("card_type") == "fallback":
         st.error(f"**{card.headline}**")
         if card.observation:
@@ -182,6 +207,9 @@ def _show_card(card) -> None:
         )
 
     st.markdown(f"**Cost:** ${card.cost_usd_total:.5f} · **Latency:** {card.latency_ms} ms")
+    if session_id:
+        st.code(session_id, language=None)
+        st.caption("↑ Session ID — pass as `scan_session_id` to VoiceOS for voice follow-up")
 
 
 def _show_cost_log(cost_log) -> None:
@@ -253,14 +281,39 @@ def main() -> None:
     vision = state.get("vision_result")
     memory = state.get("memory_result")
     search = state.get("search_result")
+    reasoning = state.get("reasoning_trace")
     cost_log = state.get("cost_log", [])
     errors = state.get("errors", [])
+
+    # Detect cache hit: vision ran iff vision_result has real evidence (not the cache placeholder)
+    from_cache = vision is not None and vision.evidence == ["(restored from cache)"]
+
+    # Generate a session ID (mirrors server._store_session logic)
+    session_id: str | None = None
+    if vision is not None and card is not None:
+        from src.contracts import NormalCard as _NCard
+        from src.session_store import create_session
+
+        card_body = card.body if isinstance(card, _NCard) else card.observation
+        ctx = create_session(
+            entity_name=vision.entity_name,
+            entity_type=vision.entity_type,
+            confidence_level=vision.confidence_level,
+            card_headline=card.headline,
+            card_body=card_body,
+            historical_facts=search.historical_facts if search else [],
+            live_facts=search.live_facts if search else [],
+            nearby_context=search.nearby_context if search else "",
+            user_id=user_id,
+            image_b64=state.get("image_b64", ""),
+        )
+        session_id = ctx.session_id
 
     # Card
     with col_card:
         st.subheader("Response card")
         if card:
-            _show_card(card)
+            _show_card(card, session_id=session_id, from_cache=from_cache)
         else:
             st.error("No card produced.")
         if errors:
@@ -271,8 +324,8 @@ def main() -> None:
     st.divider()
 
     # Agent outputs
-    tab_vision, tab_memory, tab_search, tab_cost, tab_raw = st.tabs(
-        ["👁 Vision", "🧠 Memory", "🔎 Search", "💰 Cost", "📄 Raw JSON"]
+    tab_vision, tab_memory, tab_reasoning, tab_search, tab_cost, tab_raw = st.tabs(
+        ["👁 Vision", "🧠 Memory", "🤔 Reasoning", "🔎 Search", "💰 Cost", "📄 Raw JSON"]
     )
 
     with tab_vision:
@@ -280,6 +333,24 @@ def main() -> None:
 
     with tab_memory:
         _show_memory(memory)
+
+    with tab_reasoning:
+        if reasoning is None:
+            st.info("Reasoning step was skipped (cache hit or Vision failed).")
+        else:
+            st.markdown(f"**What we know:** {reasoning.what_we_know}")
+            if reasoning.memory_context:
+                st.markdown(f"**Memory context:** {reasoning.memory_context}")
+            if reasoning.key_unknowns:
+                st.markdown("**Key unknowns**")
+                for u in reasoning.key_unknowns:
+                    st.markdown(f"- {u}")
+            st.markdown(f"**Research brief:** {reasoning.research_brief}")
+            if reasoning.suggested_tool_priority:
+                st.markdown(
+                    "**Suggested tool order:** "
+                    + " → ".join(f"`{t}`" for t in reasoning.suggested_tool_priority)
+                )
 
     with tab_search:
         _show_search(search)
@@ -290,9 +361,12 @@ def main() -> None:
     with tab_raw:
         st.json(
             {
+                "session_id": session_id,
+                "from_cache": from_cache,
                 "card": card.model_dump() if card else None,
                 "vision": vision.model_dump() if vision else None,
                 "memory": memory.model_dump(mode="json") if memory else None,
+                "reasoning": reasoning.model_dump() if reasoning else None,
                 "search": search.model_dump() if search else None,
             }
         )
