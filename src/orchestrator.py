@@ -167,14 +167,15 @@ async def cache_check_node(state: LensState) -> LensState:
     meta = cached.get("_entity_meta")
     if meta:
         try:
+            conf = meta.get("confidence_level", "fairly_sure")
             vision_from_cache = VisionResult(
                 entity_name=meta["entity_name"],
                 entity_type=meta.get("entity_type", "unknown"),
-                confidence_level=meta.get("confidence_level", "fairly_sure"),
+                confidence_level=conf,
                 evidence=["(restored from cache)"],
                 alternatives=[],
                 failure_modes_checked=["(restored from cache)"],
-                needs_fallback=False,
+                needs_fallback=(conf == "guessing"),
             )
         except Exception as exc:
             logger.warning("Could not restore VisionResult from cache meta: %s", exc)
@@ -187,10 +188,9 @@ def _should_run_agents(state: LensState) -> str:
 
 
 async def vision_memory_node(state: LensState) -> LensState:
-    vision_result, memory_result = await asyncio.gather(
-        _safe_vision(state),
-        _safe_memory(state, state["input"].image_path),
-    )
+    vision_result = await _safe_vision(state)
+    subject_name = vision_result.entity_name if vision_result else "unknown entity"
+    memory_result = await _safe_memory(state, subject_name)
     return {**state, "vision_result": vision_result, "memory_result": memory_result}
 
 
@@ -265,7 +265,7 @@ async def fuse_node(state: LensState) -> LensState:
         latency_ms=elapsed_ms,
         user_locale=state["input"].user_locale,
     )
-    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card, state["vision_result"]))
+    await _write_cache_async(state["_cache_key"], card, state["vision_result"])
     return {**state, "response_card": card}
 
 
@@ -448,10 +448,9 @@ async def stream_pipeline(inp: LensInput):
         "search_route": "default",
     }
 
-    vision_result, memory_result = await asyncio.gather(
-        _safe_vision(fake_state),
-        _safe_memory(fake_state, inp.image_path),
-    )
+    vision_result = await _safe_vision(fake_state)
+    subject_name = vision_result.entity_name if vision_result else "unknown entity"
+    memory_result = await _safe_memory(fake_state, subject_name)
     fake_state = {**fake_state, "vision_result": vision_result, "memory_result": memory_result}
 
     reasoning_trace = await _safe_reasoning(fake_state)
