@@ -1,10 +1,17 @@
-"""SQLite setup and helpers for Phase 0 memory storage."""
+"""SQLite setup and helpers for Phase 0 memory storage.
+
+When DATABASE_URL is set in the environment, the PostgreSQL + pgvector
+backend (src/db_postgres.py) overrides all public functions at the bottom
+of this module.  The rest of the codebase always imports from ``src.db``
+and never needs to know which backend is active.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import math
+import os
 import re
 import sqlite3
 import struct
@@ -369,3 +376,22 @@ async def write_cost_entry(
             conn.close()
 
     await asyncio.get_running_loop().run_in_executor(None, _write)
+
+
+# ---------------------------------------------------------------------------
+# Backend override — PostgreSQL replaces SQLite when DATABASE_URL is set
+# ---------------------------------------------------------------------------
+
+if os.environ.get("DATABASE_URL"):
+    from src.db_postgres import (  # noqa: F401
+        get_entity_facts,
+        get_user_interests,
+        search_interactions,
+        upsert_interest,
+        write_cost_entry,
+        write_entity_facts,
+        write_interaction,
+    )
+    from src.db_postgres import init_db as init_db  # type: ignore[assignment]  # noqa: F401
+
+    logger.info("PostgreSQL backend active (DATABASE_URL detected)")
