@@ -6,7 +6,7 @@ enum ScanState {
     case idle
     case scanning
     case streaming(String)  // accumulated tokens so far
-    case done(ResponseCard)
+    case done(ResponseCard, sessionId: String?)
     case failed(String)
 
     var isActive: Bool {
@@ -54,8 +54,8 @@ final class ScanViewModel: ObservableObject {
                 case .token(let chunk):
                     accumulated += chunk
                     state = .streaming(accumulated)
-                case .card(let card):
-                    state = .done(card)
+                case .card(let card, let sessionId):
+                    state = .done(card, sessionId: sessionId)
                 case .error(let detail):
                     state = .failed(detail)
                 }
