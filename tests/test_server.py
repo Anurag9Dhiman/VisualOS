@@ -282,3 +282,58 @@ async def test_auth_stream_requires_key(client: AsyncClient, monkeypatch: pytest
             files={"image": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")},
         )
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /session/{session_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_get_session_returns_context(client: AsyncClient):
+    from src.session_store import create_session
+
+    ctx = create_session(
+        entity_name="Eiffel Tower",
+        entity_type="monument",
+        confidence_level="certain",
+        card_headline="Eiffel Tower",
+        card_body="Iron lattice tower in Paris.",
+        historical_facts=[],
+        live_facts=[],
+        nearby_context="",
+        user_id="u1",
+    )
+    async with client as c:
+        r = await c.get(f"/session/{ctx.session_id}")
+    assert r.status_code == 200
+    assert r.json()["entity_name"] == "Eiffel Tower"
+    assert r.json()["session_id"] == ctx.session_id
+
+
+async def test_get_session_missing_returns_404(client: AsyncClient):
+    async with client as c:
+        r = await c.get("/session/00000000-0000-0000-0000-000000000000")
+    assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# _on_shutdown — PostgreSQL pool teardown
+# ---------------------------------------------------------------------------
+
+
+async def test_on_shutdown_no_database_url_is_noop(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    from src.server import _on_shutdown
+
+    await _on_shutdown()  # must not raise
+
+
+async def test_on_shutdown_with_database_url_calls_close(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://dummy/dummy")
+    from unittest.mock import AsyncMock, patch
+
+    with patch("src.db_postgres.close", new_callable=AsyncMock) as mock_close:
+        from src.server import _on_shutdown
+
+        await _on_shutdown()
+    mock_close.assert_called_once()
