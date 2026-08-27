@@ -220,3 +220,191 @@ async def test_write_cost_entry_multiple_entries(tmp_db):
     count = conn.execute("SELECT COUNT(*) FROM cost_log").fetchone()[0]
     conn.close()
     assert count == 2
+
+
+# ---------------------------------------------------------------------------
+# BM25 helpers — _tokenise, _bm25_score, _reciprocal_rank_fusion
+# ---------------------------------------------------------------------------
+
+
+def test_tokenise_lowercases_and_splits():
+    tokens = db_module._tokenise("India Gate 2024")
+    assert tokens == ["india", "gate", "2024"]
+
+
+def test_tokenise_strips_punctuation():
+    tokens = db_module._tokenise("Eiffel Tower, Paris!")
+    assert "eiffel" in tokens
+    assert "tower" in tokens
+    assert "paris" in tokens
+    assert "," not in tokens
+
+
+def test_tokenise_empty_string():
+    assert db_module._tokenise("") == []
+
+
+def test_bm25_exact_match_scores_higher_than_no_match():
+    query = db_module._tokenise("India Gate")
+    score_match = db_module._bm25_score(query, "India Gate monument", avg_dl=3.0)
+    score_no_match = db_module._bm25_score(query, "Colosseum amphitheatre Rome", avg_dl=3.0)
+    assert score_match > score_no_match
+
+
+def test_bm25_zero_for_empty_query():
+    assert db_module._bm25_score([], "India Gate monument", avg_dl=3.0) == 0.0
+
+
+def test_bm25_zero_for_no_overlap():
+    query = db_module._tokenise("Eiffel Tower")
+    score = db_module._bm25_score(query, "Colosseum Rome", avg_dl=2.0)
+    assert score == 0.0
+
+
+def test_rrf_combines_two_rankings():
+    # Two identical rankings → same order preserved
+    ranked = [0, 1, 2]
+    fused = db_module._reciprocal_rank_fusion([ranked, ranked])
+    order = [idx for idx, _ in fused]
+    assert order == [0, 1, 2]
+
+
+def test_rrf_combines_conflicting_rankings():
+    # Ranking A prefers 0, Ranking B prefers 1 → item appearing in both gets combined score
+    fused = db_module._reciprocal_rank_fusion([[0, 1], [1, 0]])
+    scores = dict(fused)
+    # Both 0 and 1 appear in both lists — item 0 is rank-1 in A and rank-2 in B; item 1 vice versa
+    # RRF is symmetric here, so scores should be equal
+    assert scores[0] == pytest.approx(scores[1])
+
+
+def test_rrf_item_only_in_one_list_scores_lower():
+    # item 2 only in one list — should score lower than items in both
+    fused = db_module._reciprocal_rank_fusion([[0, 1, 2], [0, 1]])
+    scores = dict(fused)
+    assert scores[0] > scores[2]  # 0 in both lists > 2 in only one
+
+
+# ---------------------------------------------------------------------------
+# Hybrid search — search_interactions with query_text
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_boosts_exact_name_match(tmp_db):
+    """BM25 should boost an exact name match above a semantically similar but differently-named entity."""
+    # Same embedding for both — semantic score identical
+    embed = _make_embedding(value=0.5)
+
+    await db_module.write_interaction("u1", "India Gate", "War memorial in New Delhi.", embed)
+    await db_module.write_interaction(
+        "u1", "Rajpath Boulevard", "Road leading to India Gate.", embed
+    )
+
+    # With hybrid search, "India Gate" query_text should boost the exact match
+    results = await db_module.search_interactions("u1", embed, query_text="India Gate", top_k=2)
+    assert len(results) == 2
+    # India Gate should be ranked first due to BM25 boost
+    assert results[0]["subject_name"] == "India Gate"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_fallback_without_query_text(tmp_db):
+    """query_text='' falls back to pure semantic — results still returned."""
+    embed = _make_embedding(value=0.5)
+    await db_module.write_interaction("u1", "Eiffel Tower", "Iron tower in Paris.", embed)
+
+    results = await db_module.search_interactions("u1", embed, query_text="", top_k=5)
+    assert len(results) == 1
+    assert results[0]["subject_name"] == "Eiffel Tower"
+
+
+# ---------------------------------------------------------------------------
+# Layer 3 — write_entity_facts / get_entity_facts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_write_and_read_entity_facts(tmp_db):
+    facts = [
+        {"fact_key": "historical", "fact_value": "Built in 1931", "source": "Wikipedia"},
+        {
+            "fact_key": "live",
+            "fact_value": "Open 24 hours",
+            "source": "Travily",
+            "as_of": "2026-01",
+        },
+    ]
+    await db_module.write_entity_facts("India Gate", facts)
+
+    results = await db_module.get_entity_facts("India Gate")
+    assert len(results) == 2
+    values = {r["fact_value"] for r in results}
+    assert "Built in 1931" in values
+    assert "Open 24 hours" in values
+
+
+@pytest.mark.asyncio
+async def test_entity_facts_different_entities_isolated(tmp_db):
+    await db_module.write_entity_facts(
+        "India Gate", [{"fact_key": "historical", "fact_value": "Built 1931", "source": "Wiki"}]
+    )
+    await db_module.write_entity_facts(
+        "Colosseum", [{"fact_key": "historical", "fact_value": "Built 70 AD", "source": "Wiki"}]
+    )
+
+    india_gate = await db_module.get_entity_facts("India Gate")
+    colosseum = await db_module.get_entity_facts("Colosseum")
+
+    assert all(r["fact_value"] != "Built 70 AD" for r in india_gate)
+    assert all(r["fact_value"] != "Built 1931" for r in colosseum)
+
+
+@pytest.mark.asyncio
+async def test_entity_facts_empty_for_unknown_entity(tmp_db):
+    results = await db_module.get_entity_facts("Unknown Entity XYZ")
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_entity_facts_top_k_limits_results(tmp_db):
+    facts = [{"fact_key": "f", "fact_value": f"fact {i}", "source": "s"} for i in range(15)]
+    await db_module.write_entity_facts("Big Entity", facts)
+
+    results = await db_module.get_entity_facts("Big Entity", top_k=5)
+    assert len(results) == 5
+
+
+@pytest.mark.asyncio
+async def test_entity_facts_preserves_versions(tmp_db):
+    """Writing facts twice for the same entity appends — does not overwrite."""
+    fact_v1 = [{"fact_key": "hours", "fact_value": "Open 9-5", "source": "site"}]
+    fact_v2 = [{"fact_key": "hours", "fact_value": "Open 8-6", "source": "site"}]
+
+    await db_module.write_entity_facts("Museum", fact_v1)
+    await db_module.write_entity_facts("Museum", fact_v2)
+
+    results = await db_module.get_entity_facts("Museum", top_k=10)
+    values = {r["fact_value"] for r in results}
+    # Both versions preserved
+    assert "Open 9-5" in values
+    assert "Open 8-6" in values
+
+
+@pytest.mark.asyncio
+async def test_entity_facts_live_fact_as_of_stored(tmp_db):
+    facts = [
+        {"fact_key": "live", "fact_value": "Closed today", "source": "web", "as_of": "2026-08"}
+    ]
+    await db_module.write_entity_facts("Gallery", facts)
+
+    results = await db_module.get_entity_facts("Gallery")
+    assert results[0]["as_of"] == "2026-08"
+
+
+@pytest.mark.asyncio
+async def test_write_entity_facts_empty_list_is_noop(tmp_db):
+    """Writing an empty facts list should not raise and should store nothing."""
+    await db_module.write_entity_facts("Empty Entity", [])
+    results = await db_module.get_entity_facts("Empty Entity")
+    assert results == []
