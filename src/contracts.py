@@ -89,6 +89,8 @@ class MemoryResult(BaseModel):
     hits: list[MemoryHit]
     user_id: str
     user_interests_snapshot: dict[str, float] = {}
+    recent_context: str = ""  # Layer 1 — rolling in-context window of recent scans
+    entity_facts: list[dict] = []  # Layer 3 — persisted facts for this entity
 
 
 # ---------------------------------------------------------------------------
