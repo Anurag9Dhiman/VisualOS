@@ -114,13 +114,17 @@ def capture_webcam(camera_index: int = 0) -> bytes:
 def capture_clipboard() -> bytes:
     """Grab the image currently on the system clipboard."""
     try:
-        from PIL import ImageGrab  # Pillow — already in requirements
-    except ImportError:
-        raise RuntimeError("Pillow is required for clipboard capture: pip install Pillow")
+        from PIL import Image, ImageGrab  # Pillow — already in requirements
+    except ImportError as exc:
+        raise RuntimeError("Pillow is required for clipboard capture: pip install Pillow") from exc
 
     img = ImageGrab.grabclipboard()
     if img is None:
         raise RuntimeError("No image found on clipboard. Copy an image first (Cmd+C).")
+    if not isinstance(img, Image.Image):
+        raise RuntimeError(
+            "Clipboard contains non-image data (e.g. a file list). Copy a single image first."
+        )
 
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=90)

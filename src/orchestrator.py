@@ -347,15 +347,17 @@ async def _write_memory_async(
         # Layer 3: persist facts from Search result
         if search_result is not None:
             facts: list[dict] = []
-            for hf in (search_result.historical_facts or []):
+            for hf in search_result.historical_facts or []:
                 facts.append({"fact_key": "historical", "fact_value": hf.fact, "source": hf.source})
-            for lf in (search_result.live_facts or []):
-                facts.append({
-                    "fact_key": "live",
-                    "fact_value": lf.fact,
-                    "source": lf.source,
-                    "as_of": lf.as_of,
-                })
+            for lf in search_result.live_facts or []:
+                facts.append(
+                    {
+                        "fact_key": "live",
+                        "fact_value": lf.fact,
+                        "source": lf.source,
+                        "as_of": lf.as_of,
+                    }
+                )
             if facts:
                 await db.write_entity_facts(subject_name, facts)
 
