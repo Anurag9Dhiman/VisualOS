@@ -1,7 +1,18 @@
 app = "lens-os-api"
-primary_region = "sin"  # Singapore — lowest latency from India
+primary_region = "sin"  # Singapore — lowest latency for India users
 
 [build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Runs before traffic switches over on every deploy.
+  # CREATE TABLE/INDEX are all IF NOT EXISTS — safe to repeat.
+  release_command = "python -c 'import asyncio; from src.db_postgres import init_db; asyncio.run(init_db())'"
+
+[env]
+  LANGCHAIN_PROJECT = "lens-os-prod"
+  # Secrets (GOOGLE_API_KEY, DATABASE_URL, LENS_API_KEY, TAVILY_API_KEY)
+  # are set via: fly secrets set KEY=value  — never stored in fly.toml
 
 [http_service]
   internal_port = 8000
@@ -11,7 +22,7 @@ primary_region = "sin"  # Singapore — lowest latency from India
   min_machines_running = 0
 
   [[http_service.checks]]
-    grace_period = "10s"
+    grace_period = "15s"
     interval = "30s"
     method = "GET"
     path = "/health"
