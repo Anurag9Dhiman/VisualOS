@@ -214,3 +214,93 @@ struct AnalyzeClientTests {
         #expect(errors.count == 5)
     }
 }
+
+// MARK: - SSE event parsing tests
+// Tests the JSON → StreamEvent parsing logic that AnalyzeClient applies to each SSE line.
+// Transport (bytes.lines) is covered by integration tests against a live server.
+
+@Suite("SSE event parsing")
+struct SSEEventParsingTests {
+
+    private let normalCardJSON = """
+    {"card_type":"normal","headline":"India Gate","body":"A war memorial in Delhi.",
+     "personalized_hooks":[],"citations":[],"confidence_displayed":"high",
+     "source_mix":{"used_vision":true,"used_memory":false,"used_search":true},
+     "cost_usd_total":0.001,"latency_ms":900}
+    """
+
+    private func parse(_ jsonLine: String) throws -> (type: String, obj: [String: Any]) {
+        let data = jsonLine.data(using: .utf8)!
+        let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        return (obj["type"] as! String, obj)
+    }
+
+    @Test("token event parsed correctly")
+    func parsesTokenEvent() throws {
+        let (type_, obj) = try parse(#"{"type":"token","text":"Hello "}"#)
+        #expect(type_ == "token")
+        #expect(obj["text"] as? String == "Hello ")
+    }
+
+    @Test("card event with session_id parsed correctly")
+    func parsesCardEventWithSessionId() throws {
+        let line = "{\"type\":\"card\",\"card\":\(normalCardJSON),\"session_id\":\"abc-123\"}"
+        let (type_, obj) = try parse(line)
+        #expect(type_ == "card")
+        let sessionId = obj["session_id"] as? String
+        #expect(sessionId == "abc-123")
+        let cardData = try JSONSerialization.data(withJSONObject: obj["card"]!)
+        let card = try JSONDecoder().decode(ResponseCard.self, from: cardData)
+        #expect(card.headline == "India Gate")
+    }
+
+    @Test("card event with null session_id yields nil")
+    func parsesCardEventNullSessionId() throws {
+        let line = "{\"type\":\"card\",\"card\":\(normalCardJSON),\"session_id\":null}"
+        let (_, obj) = try parse(line)
+        let sessionId = obj["session_id"] as? String
+        #expect(sessionId == nil)
+    }
+
+    @Test("card event without session_id key yields nil")
+    func parsesCardEventMissingSessionId() throws {
+        let line = "{\"type\":\"card\",\"card\":\(normalCardJSON)}"
+        let (_, obj) = try parse(line)
+        let sessionId = obj["session_id"] as? String
+        #expect(sessionId == nil)
+    }
+
+    @Test("error event parsed correctly")
+    func parsesErrorEvent() throws {
+        let (type_, obj) = try parse(#"{"type":"error","detail":"Pipeline timed out"}"#)
+        #expect(type_ == "error")
+        #expect((obj["detail"] as? String)?.contains("timed out") == true)
+    }
+
+    @Test("StreamEvent.card carries sessionId through enum")
+    func streamEventCardCarriesSessionId() {
+        let card = ResponseCard.fallback(FallbackCard(
+            headline: "Not sure",
+            observation: "A stone structure.",
+            suggestion: "Move closer."
+        ))
+        let event = StreamEvent.card(card, sessionId: "xyz-789")
+        guard case .card(let c, let sid) = event else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(c.headline == "Not sure")
+        #expect(sid == "xyz-789")
+    }
+
+    @Test("StreamEvent.card with nil sessionId")
+    func streamEventCardNilSessionId() {
+        let card = ResponseCard.fallback(FallbackCard(
+            headline: "Not sure", observation: ".", suggestion: "Try again."
+        ))
+        let event = StreamEvent.card(card, sessionId: nil)
+        guard case .card(_, let sid) = event else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(sid == nil)
+    }
+}
