@@ -328,7 +328,7 @@ async def test_list_sessions_returns_user_sessions(client: AsyncClient):
     from src.session_store import _clear_all, create_session
 
     _clear_all()
-    create_session(
+    await create_session(
         entity_name="India Gate",
         entity_type="monument",
         confidence_level="certain",
@@ -339,7 +339,7 @@ async def test_list_sessions_returns_user_sessions(client: AsyncClient):
         nearby_context="",
         user_id="hist-user",
     )
-    create_session(
+    await create_session(
         entity_name="Humayun's Tomb",
         entity_type="monument",
         confidence_level="certain",
@@ -363,7 +363,7 @@ async def test_list_sessions_excludes_image_b64(client: AsyncClient):
     from src.session_store import _clear_all, create_session
 
     _clear_all()
-    create_session(
+    await create_session(
         entity_name="Gateway of India",
         entity_type="monument",
         confidence_level="certain",
@@ -397,7 +397,7 @@ async def test_list_sessions_empty_for_unknown_user(client: AsyncClient):
 async def test_get_session_returns_context(client: AsyncClient):
     from src.session_store import create_session
 
-    ctx = create_session(
+    ctx = await create_session(
         entity_name="Eiffel Tower",
         entity_type="monument",
         confidence_level="certain",

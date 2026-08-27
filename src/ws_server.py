@@ -130,7 +130,7 @@ async def _handle_query(
     # ── Resolve ScanContext ───────────────────────────────────────────────────
     # Mobile app should pass scan_session_id in entity_refs; fall back to ws_session_id.
     scan_session_id: str = entity_refs.get("scan_session_id", "") or ws_session_id
-    ctx = get_session(scan_session_id)
+    ctx = await get_session(scan_session_id)
     if ctx is None:
         await _send(
             ws,

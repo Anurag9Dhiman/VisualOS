@@ -75,7 +75,7 @@ _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def _store_session(state: LensState, user_id: str) -> ScanContext | None:
+async def _store_session(state: LensState, user_id: str) -> ScanContext | None:
     """Build and store a ScanContext from a completed pipeline state."""
     vision = state.get("vision_result")
     card = state.get("response_card")
@@ -86,7 +86,7 @@ def _store_session(state: LensState, user_id: str) -> ScanContext | None:
     historical_facts = search.historical_facts if search else []
     live_facts = search.live_facts if search else []
     nearby_context = search.nearby_context if search else ""
-    return create_session(
+    return await create_session(
         entity_name=vision.entity_name,
         entity_type=vision.entity_type,
         confidence_level=vision.confidence_level,
@@ -152,7 +152,7 @@ async def analyze(
     if card is None:
         raise HTTPException(status_code=500, detail="Pipeline produced no card")
 
-    session = _store_session(state, user_id)
+    session = await _store_session(state, user_id)
     return {"card": card.model_dump(), "session_id": session.session_id if session else None}
 
 
@@ -185,7 +185,7 @@ async def analyze_stream(
                     yield f"data: {json.dumps({'type': 'token', 'text': chunk})}\n\n"
                 else:
                     card = state.get("response_card")
-                    session = _store_session(state, user_id)
+                    session = await _store_session(state, user_id)
                     yield f"data: {json.dumps({'type': 'card', 'card': card.model_dump() if card else None, 'session_id': session.session_id if session else None})}\n\n"
         except TimeoutError:
             yield f"data: {json.dumps({'type': 'error', 'detail': 'Pipeline timed out'})}\n\n"
@@ -219,7 +219,7 @@ async def list_scan_sessions(
 
     Excludes image_b64 from each entry to keep response size small.
     """
-    sessions = list_sessions(user_id, limit=min(limit, 50))
+    sessions = await list_sessions(user_id, limit=min(limit, 50))
     return [s.model_dump(mode="json", exclude={"image_b64"}) for s in sessions]
 
 
@@ -231,7 +231,7 @@ async def get_scan_session(session_id: str) -> dict:
     in the original scan output. Returns 404 if the session is unknown or
     has expired (TTL: 1 hour).
     """
-    ctx = get_session(session_id)
+    ctx = await get_session(session_id)
     if ctx is None:
         raise HTTPException(status_code=404, detail="Session not found or expired")
     return ctx.model_dump(mode="json")
