@@ -14,6 +14,7 @@ import logging
 import os
 
 from google import genai
+from langsmith import traceable
 
 from src import db, memory_l1, rate_limiter
 from src.contracts import CostEntry, MemoryHit, MemoryResult
@@ -22,11 +23,12 @@ from src.db import get_entity_facts, get_user_interests
 
 logger = logging.getLogger("lens.memory")
 
-_EMBED_MODEL = "gemini-embedding-001"
+_EMBED_MODEL = os.environ.get("EMBED_MODEL", "gemini-embedding-001")
 _TIMEOUT_S = 5.0
 _SIMILARITY_THRESHOLD = 0.75
 
 
+@traceable(name="memory_agent")
 async def run_memory_agent(
     subject_name: str,
     user_id: str,
