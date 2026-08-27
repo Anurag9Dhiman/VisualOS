@@ -187,10 +187,9 @@ def _should_run_agents(state: LensState) -> str:
 
 
 async def vision_memory_node(state: LensState) -> LensState:
-    vision_result, memory_result = await asyncio.gather(
-        _safe_vision(state),
-        _safe_memory(state, state["input"].image_path),
-    )
+    vision_result = await _safe_vision(state)
+    subject_name = vision_result.entity_name if vision_result else "unknown entity"
+    memory_result = await _safe_memory(state, subject_name)
     return {**state, "vision_result": vision_result, "memory_result": memory_result}
 
 
@@ -448,10 +447,9 @@ async def stream_pipeline(inp: LensInput):
         "search_route": "default",
     }
 
-    vision_result, memory_result = await asyncio.gather(
-        _safe_vision(fake_state),
-        _safe_memory(fake_state, inp.image_path),
-    )
+    vision_result = await _safe_vision(fake_state)
+    subject_name = vision_result.entity_name if vision_result else "unknown entity"
+    memory_result = await _safe_memory(fake_state, subject_name)
     fake_state = {**fake_state, "vision_result": vision_result, "memory_result": memory_result}
 
     reasoning_trace = await _safe_reasoning(fake_state)
