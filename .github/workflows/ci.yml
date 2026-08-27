@@ -7,6 +7,20 @@ on:
     branches: [main, claude/lens-os-phase0]
 
 jobs:
+  swift:
+    name: Swift tests (LensClient)
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: swift test
+        working-directory: ios/LensClient
+        run: swift test
+
   test:
     name: Tests (Python 3.12)
     runs-on: ubuntu-latest
