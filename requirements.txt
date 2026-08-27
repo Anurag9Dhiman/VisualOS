@@ -39,3 +39,9 @@ pre-commit>=4.6.1
 
 # Security
 pip-audit>=2.7.0
+
+# macOS client (optional — only needed for mac_client.py)
+# Install with: pip install opencv-python mss
+# opencv-python>=5.0.0  # webcam capture
+# mss>=10.0.0           # programmatic screen capture
+# rumps>=0.4.0          # macOS menu bar app (future Phase 1 Mac app)

@@ -21,7 +21,7 @@ from src.prompts import VISION_SYSTEM_PROMPT, GeoPoint
 
 logger = logging.getLogger("lens.vision")
 
-_MODEL = "gemini-3.5-flash"
+_MODEL = "gemini-3.6-flash"
 _TIMEOUT_S = 12.0
 _MAX_DIMENSION = 1024
 _JPEG_QUALITY = 85

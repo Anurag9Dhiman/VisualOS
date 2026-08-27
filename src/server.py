@@ -16,6 +16,10 @@ import os
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, File, Form, HTTPException, Security, UploadFile, WebSocket
 from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader

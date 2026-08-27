@@ -12,6 +12,7 @@ logger = logging.getLogger("lens.cost")
 
 # Prices per 1 000 tokens (input / output)
 _PRICES: dict[str, tuple[float, float]] = {
+    "gemini-3.6-flash": (0.000075, 0.0003),
     "gemini-3.5-flash": (0.000075, 0.0003),
     "gemini-2.0-flash": (0.000075, 0.0003),
     "gemini-embedding-001": (0.000025, 0.0),

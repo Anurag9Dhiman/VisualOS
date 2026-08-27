@@ -160,7 +160,26 @@ async def cache_check_node(state: LensState) -> LensState:
     else:
         card = NormalCard(**{k: v for k, v in cached.items() if k in NormalCard.model_fields})
     logger.info("Returning cached card — skipping all agents")
-    return {**state, "response_card": card}
+
+    # Restore a minimal VisionResult from cached entity metadata so that
+    # _store_session in server.py can create a voice session on cache hits.
+    vision_from_cache: VisionResult | None = None
+    meta = cached.get("_entity_meta")
+    if meta:
+        try:
+            vision_from_cache = VisionResult(
+                entity_name=meta["entity_name"],
+                entity_type=meta.get("entity_type", "unknown"),
+                confidence_level=meta.get("confidence_level", "fairly_sure"),
+                evidence=["(restored from cache)"],
+                alternatives=[],
+                failure_modes_checked=["(restored from cache)"],
+                needs_fallback=False,
+            )
+        except Exception as exc:
+            logger.warning("Could not restore VisionResult from cache meta: %s", exc)
+
+    return {**state, "response_card": card, "vision_result": vision_from_cache}
 
 
 def _should_run_agents(state: LensState) -> str:
@@ -246,15 +265,24 @@ async def fuse_node(state: LensState) -> LensState:
         latency_ms=elapsed_ms,
         user_locale=state["input"].user_locale,
     )
-    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card))
+    asyncio.ensure_future(_write_cache_async(state["_cache_key"], card, state["vision_result"]))
     return {**state, "response_card": card}
 
 
-async def _write_cache_async(cache_key: str, card: ResponseCard) -> None:
+async def _write_cache_async(
+    cache_key: str, card: ResponseCard, vision: VisionResult | None
+) -> None:
     from src.cache import cache_set
 
+    entity_dict: dict | None = None
+    if vision is not None:
+        entity_dict = {
+            "entity_name": vision.entity_name,
+            "entity_type": vision.entity_type,
+            "confidence_level": vision.confidence_level,
+        }
     try:
-        await cache_set(cache_key, card.model_dump())
+        await cache_set(cache_key, card.model_dump(), entity_dict)
     except Exception as exc:
         logger.warning("cache_set failed: %s", exc)
 
