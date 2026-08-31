@@ -8,7 +8,7 @@ langsmith>=0.11.1
 
 # HTTP / tools
 httpx>=0.28.1
-tavily-python>=0.7.26
+tavily-python>=0.8.0
 Pillow>=12.3.0
 
 # Web inspector
