@@ -39,9 +39,7 @@ def _normal_card() -> NormalCard:
 
 
 def _send_body(task_id: str = "t1", extra_text: str | None = None) -> dict:
-    parts: list[dict] = [
-        {"type": "file", "file": {"mimeType": "image/jpeg", "data": _jpeg_b64()}}
-    ]
+    parts: list[dict] = [{"type": "file", "file": {"mimeType": "image/jpeg", "data": _jpeg_b64()}}]
     if extra_text:
         parts.append({"type": "text", "text": extra_text})
     return {
@@ -165,7 +163,14 @@ async def test_tasks_send_subscribe_streams_events(client: AsyncClient):
                 "method": "tasks/sendSubscribe",
                 "params": {
                     "id": "t4",
-                    "message": {"parts": [{"type": "file", "file": {"mimeType": "image/jpeg", "data": _jpeg_b64()}}]},
+                    "message": {
+                        "parts": [
+                            {
+                                "type": "file",
+                                "file": {"mimeType": "image/jpeg", "data": _jpeg_b64()},
+                            }
+                        ]
+                    },
                 },
             }
             r = await c.post("/", json=body)
@@ -173,11 +178,7 @@ async def test_tasks_send_subscribe_streams_events(client: AsyncClient):
     assert r.status_code == 200
     assert "text/event-stream" in r.headers["content-type"]
 
-    events = [
-        json.loads(line[6:])
-        for line in r.text.splitlines()
-        if line.startswith("data: ")
-    ]
+    events = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
     states = [e["result"]["status"]["state"] for e in events]
     assert "working" in states
     assert states[-1] == "completed"
