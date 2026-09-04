@@ -37,6 +37,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
 from slowapi.util import get_remote_address  # noqa: E402
 
+from src.a2a import a2a_router  # noqa: E402
 from src.contracts import LensInput, NormalCard, ScanContext  # noqa: E402
 from src.orchestrator import LensState, run_pipeline, stream_pipeline  # noqa: E402
 from src.session_store import create_session, get_session, list_sessions  # noqa: E402
@@ -63,6 +64,7 @@ async def _on_shutdown() -> None:
 
 app = FastAPI(title="Lens OS API", version="0.1.0", on_shutdown=[_on_shutdown])
 app.state.limiter = limiter
+app.include_router(a2a_router)
 
 
 async def _rate_limit_handler(request: Request, exc: Exception) -> Response:

@@ -212,3 +212,155 @@ async def test_list_sessions_respects_limit():
 async def test_list_sessions_empty_for_unknown_user():
     await _make_session(user_id="alice")
     assert await list_sessions("nobody") == []
+
+
+# ---------------------------------------------------------------------------
+# Redis backend — covered with an AsyncMock so no live Redis needed
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=False)
+def reset_redis():
+    """Reset the global _redis handle before and after each Redis test."""
+    from src import session_store
+
+    session_store._redis = None
+    yield
+    session_store._redis = None
+
+
+def _make_async_iter(items):
+    """Wrap a list in an async iterator for scan_iter mocking."""
+
+    async def _gen():
+        for item in items:
+            yield item
+
+    return _gen()
+
+
+async def test_get_redis_returns_none_without_env(monkeypatch, reset_redis):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    from src.session_store import _get_redis
+
+    assert _get_redis() is None
+
+
+async def test_get_redis_returns_cached_client(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    fake_client = AsyncMock()
+    session_store._redis = fake_client  # pre-seed the cache
+    assert session_store._get_redis() is fake_client
+
+
+async def test_redis_set_writes_key(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    # Build session before injecting mock so create_session doesn't count
+    ctx = await _make_session()
+
+    fake_client = AsyncMock()
+    session_store._redis = fake_client
+    await session_store._redis_set(ctx)
+
+    fake_client.set.assert_awaited_once()
+    args, kwargs = fake_client.set.call_args
+    assert args[0].startswith("lens:session:")
+    assert kwargs["ex"] == session_store._SESSION_TTL_SECS
+
+
+async def test_redis_get_returns_none_for_missing_key(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=None)
+    session_store._redis = fake_client
+
+    result = await session_store._redis_get("nonexistent-id")
+    assert result is None
+
+
+async def test_redis_get_deserialises_session(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    ctx = await _make_session()
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=ctx.model_dump_json())
+    session_store._redis = fake_client
+
+    result = await session_store._redis_get(ctx.session_id)
+    assert result is not None
+    assert result.entity_name == ctx.entity_name
+
+
+async def test_redis_get_returns_none_for_invalid_json(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value="not-valid-json{{{")
+    session_store._redis = fake_client
+
+    result = await session_store._redis_get("any-id")
+    assert result is None
+
+
+async def test_redis_scan_user_returns_matching_sessions(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    ctx = await _make_session(user_id="redis-user")
+    key = f"lens:session:{ctx.session_id}"
+
+    fake_client = AsyncMock()
+    fake_client.scan_iter = lambda pattern: _make_async_iter([key])
+    fake_client.get = AsyncMock(return_value=ctx.model_dump_json())
+    session_store._redis = fake_client
+
+    results = await session_store._redis_scan_user("redis-user")
+    assert len(results) == 1
+    assert results[0].entity_name == ctx.entity_name
+
+
+async def test_redis_scan_user_skips_none_values(reset_redis):
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    fake_client = AsyncMock()
+    fake_client.scan_iter = lambda pattern: _make_async_iter(["lens:session:ghost"])
+    fake_client.get = AsyncMock(return_value=None)
+    session_store._redis = fake_client
+
+    results = await session_store._redis_scan_user("any-user")
+    assert results == []
+
+
+async def test_get_session_warms_local_cache_from_redis(reset_redis):
+    """get_session must copy a Redis-found session into the in-memory store."""
+    from unittest.mock import AsyncMock
+
+    from src import session_store
+
+    ctx = await _make_session()
+    session_store._store.pop(ctx.session_id, None)  # evict from local cache
+
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=ctx.model_dump_json())
+    session_store._redis = fake_client
+
+    fetched = await session_store.get_session(ctx.session_id)
+
+    assert fetched is not None
+    assert ctx.session_id in session_store._store  # warmed into local cache
