@@ -1,14 +1,14 @@
 # Core
 google-genai>=1.0.0
 asyncpg>=0.30.0        # PostgreSQL async driver (Phase 1; no-op when DATABASE_URL unset)
-redis>=5.0.0           # async Redis client for session persistence (optional; no-op when REDIS_URL unset)
+redis>=8.1.0           # async Redis client for session persistence (optional; no-op when REDIS_URL unset)
 langgraph>=1.2.11
-langchain-core>=1.5.2
+langchain-core>=1.6.1
 langsmith>=0.11.1
 
 # HTTP / tools
 httpx>=0.28.1
-tavily-python>=0.7.26
+tavily-python>=0.8.0
 Pillow>=12.3.0
 
 # Web inspector
@@ -27,7 +27,7 @@ python-dotenv>=1.2.3
 
 # Testing
 pytest>=9.1.1
-pytest-asyncio>=0.24.0
+pytest-asyncio>=1.4.0
 pytest-cov>=7.1.0
 
 # Type checking
@@ -46,3 +46,4 @@ rumps>=0.4.0; sys_platform == "darwin"
 # mss>=10.0.0; sys_platform == "darwin"            # screen capture (mac_client.py)
 slowapi>=0.1.9
 mcp>=1.0.0              # MCP stdio server (src/mcp_server.py)
+slowapi>=0.1.10
