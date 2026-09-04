@@ -6,6 +6,7 @@ omit =
     src/mac_client.py
     src/mac_menubar.py
     src/db_postgres.py
+    src/mcp_server.py
 
 [report]
 show_missing = true
