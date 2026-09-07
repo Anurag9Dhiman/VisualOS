@@ -4,7 +4,7 @@ asyncpg>=0.30.0        # PostgreSQL async driver (Phase 1; no-op when DATABASE_U
 redis>=8.1.0           # async Redis client for session persistence (optional; no-op when REDIS_URL unset)
 langgraph>=1.2.11
 langchain-core>=1.6.1
-langsmith>=0.11.1
+langsmith>=0.12.1
 
 # HTTP / tools
 httpx>=0.28.1
