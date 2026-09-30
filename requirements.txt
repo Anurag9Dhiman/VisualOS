@@ -20,7 +20,7 @@ uvicorn>=0.52.0
 python-multipart>=0.0.32
 
 # Validation
-pydantic>=2.8.0
+pydantic>=2.13.5
 
 # Config
 python-dotenv>=1.2.3
