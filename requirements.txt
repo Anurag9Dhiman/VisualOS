@@ -31,7 +31,7 @@ pytest-asyncio>=1.4.0
 pytest-cov>=7.1.0
 
 # Type checking
-mypy>=1.11.0
+mypy>=2.4.0
 
 # Linting / formatting
 ruff==0.16.6
